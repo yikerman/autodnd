@@ -20,10 +20,11 @@ def model_from_env() -> OpenAIChatModel:
     name = os.getenv("MODEL_NAME")
     if not (endpoint and key and name):
         raise RuntimeError(
-            "MODEL_ENDPOINT, MODEL_KEY, MODEL_NAME must all be set "
-            "(see .env.example)."
+            "MODEL_ENDPOINT, MODEL_KEY, MODEL_NAME must all be set (see .env.example)."
         )
-    return OpenAIChatModel(name, provider=OpenAIProvider(base_url=endpoint, api_key=key))
+    return OpenAIChatModel(
+        name, provider=OpenAIProvider(base_url=endpoint, api_key=key)
+    )
 
 
 def load_prompt(name: str) -> str:

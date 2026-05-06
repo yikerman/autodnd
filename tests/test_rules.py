@@ -6,12 +6,13 @@ import pytest
 
 from autodnd.engine.rules import (
     apply_damage,
+    effective_mods,
     resolve_attack,
     resolve_check,
     resolve_save,
     roll,
 )
-from autodnd.engine.world import CharacterStats
+from autodnd.engine.world import CharacterStats, Item
 
 
 class _FixedRng(random.Random):
@@ -155,3 +156,52 @@ def test_apply_damage_preserves_other_fields():
     new_stats = apply_damage(stats, 4)
     assert new_stats.ac == 13
     assert new_stats.mods == {"persuasion": 2}
+
+
+def test_apply_damage_caps_healing_at_hp_max():
+    stats = CharacterStats(hp=8, hp_max=10, ac=13)
+    assert apply_damage(stats, -100).hp == 10  # clamped at max
+
+
+def test_apply_damage_unbounded_when_hp_max_zero():
+    stats = CharacterStats(hp=8, hp_max=0, ac=13)
+    assert apply_damage(stats, -100).hp == 108  # no cap
+
+
+# ---------- effective_mods ----------
+
+
+def test_effective_mods_sums_stats_and_carried_items():
+    stats = CharacterStats(hp=10, ac=13, mods={"persuasion": 1})
+    items = {
+        "persuasion_skill": Item(
+            id="persuasion_skill",
+            name="...",
+            description="...",
+            effects={"persuasion": 2},
+        ),
+        "lucky_charm": Item(
+            id="lucky_charm",
+            name="...",
+            description="...",
+            effects={"persuasion": 1, "investigation": 1},
+        ),
+    }
+    result = effective_mods(stats, ["persuasion_skill", "lucky_charm"], items)
+    assert result["persuasion"] == 1 + 2 + 1
+    assert result["investigation"] == 1
+
+
+def test_effective_mods_skips_unknown_items():
+    stats = CharacterStats(hp=10, ac=13)
+    result = effective_mods(stats, ["nonexistent"], {})
+    assert result == {}
+
+
+def test_effective_mods_does_not_mutate_stats():
+    stats = CharacterStats(hp=10, ac=13, mods={"persuasion": 1})
+    items = {
+        "x": Item(id="x", name="...", description="...", effects={"persuasion": 5}),
+    }
+    effective_mods(stats, ["x"], items)
+    assert stats.mods == {"persuasion": 1}  # original unchanged

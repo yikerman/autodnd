@@ -131,11 +131,13 @@ class WorldModel(BaseModel):
    - *Misinterpretation*: `event_id` set, NL text disagrees with the canonical event description. ("Hadrian seemed embarrassed by the gold" — actual event: he was sizing up the pouch.)
    - *Tell*: `event_id` points to a private event with no other knowledge entries; NL text is oblique. ("Something felt off about the way he turned away" — points to "Hadrian decided to betray.")
 3. **Supersession is just chronology.** If the player learns the truth, append a newer entry; the older false belief stays in the timeline. Latest-on-subject wins for present-tense rendering.
-4. **Append-only canon at the entity level.** `Location.description`, `Character.description`, `Item.description`, and any individual `Event` are write-once. `Thread.description` can be updated (synopsis evolves); events list grows; player.knowledge grows. Full per-field policy:
+4. **Append-only canon at the entity level.** `Location.description`, `Character.description`, and any individual `Event` are write-once. `Thread.description` and `Item.description` are mutable to capture *current state* (a pouch's count, a wand's charges, a potion's quantity, a thread's evolving synopsis). Events still capture the *historical fact* of the change. Full per-field policy:
 
    | Field                                          | Policy                  |
    |------------------------------------------------|-------------------------|
-   | `Location.*`, `Item.*`                         | immutable after create  |
+   | `Location.*`                                   | immutable after create  |
+   | `Item.id`, `.name`, `.effects`                 | immutable after create  |
+   | `Item.description`                             | mutable (state)         |
    | `Character.id`, `.name`, `.description`        | immutable after create  |
    | `Character.location_id`, `.stats`              | mutable                 |
    | `Event.*`                                      | immutable after create  |
@@ -186,6 +188,7 @@ class WorldDelta(BaseModel):
 
     # In-place mutations (typed channels for mutable fields per the policy table)
     threads_to_update:    dict[str, str]              = {}  # thread_id → new description
+    items_to_update:      dict[str, str]              = {}  # item_id → new description (state)
     character_moves:      dict[str, str]              = {}  # char_id   → new location_id
     character_stats:      dict[str, CharacterStats]   = {}  # char_id   → full replacement
     player_moves_to:      Optional[str]               = None
@@ -288,7 +291,7 @@ See [example.md](./example.md) — three-turn trace through a Crow's Foot Inn sc
 - **Bootstrap:** distinct `BootstrapDirective` (own schema) emitted by one Director call at `world.turn = -1`. Includes `opening_beats` so the first Narrator call uses the same contract as every turn.
 - **Event id / `t` ownership:** Director emits both; engine validates uniqueness and monotonicity. Lets directives self-reference freshly minted events (`knowledge_to_append.event_id` → same-delta event).
 - **`entities_to_create` shape:** dict-of-lists (`EntitiesToCreate` sub-model with `locations`, `characters`, `items`).
-- **Mutable state in WorldDelta:** typed channels per mutable field (`character_moves`, `character_stats`, `player_moves_to`, `player_stats`, `player_items_added`/`removed`, `threads_to_update`).
+- **Mutable state in WorldDelta:** typed channels per mutable field (`character_moves`, `character_stats`, `player_moves_to`, `player_stats`, `player_items_added`/`removed`, `threads_to_update`, `items_to_update`).
 - **Validator failure:** one Director retry with the validation error appended; second failure aborts the turn.
 - **Narrator anti-hallucination:** prior turn's Narrator prose feeds into the next Director call. Director canonizes, overrides, or contradicts.
 - **Speaker resolution:** `Beat.speaker` is a display name string, not a character id. Director resolves at emission.

@@ -4,11 +4,16 @@ Separate session from Director and Narrator — its conversation never feeds
 back into theirs, so mechanical chatter doesn't pollute narrative context.
 """
 
+import time
+from collections.abc import Mapping
+
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from autodnd.engine.world import PlayerState
+from autodnd.engine.rules import effective_mods
+from autodnd.engine.world import Item, PlayerState
 from autodnd.llm import load_prompt, model_from_env
+from autodnd.llm.tracing import log_agent_call
 
 
 def build_sidebar(model: Model | None = None) -> Agent[None, str]:
@@ -19,23 +24,46 @@ def build_sidebar(model: Model | None = None) -> Agent[None, str]:
     )
 
 
-def _format_player_state(p: PlayerState) -> str:
-    mods = (
-        ", ".join(f"{k}{v:+d}" for k, v in sorted(p.stats.mods.items()))
-        if p.stats.mods
-        else "(none)"
-    )
-    items = ", ".join(p.items) if p.items else "(none)"
+def _format_mods(d: dict[str, int]) -> str:
+    if not d:
+        return "(none)"
+    return ", ".join(f"{k}{v:+d}" for k, v in sorted(d.items()))
+
+
+def _format_player_state(p: PlayerState, items: Mapping[str, Item]) -> str:
+    s = p.stats
+    hp_str = f"{s.hp}/{s.hp_max}" if s.hp_max > 0 else str(s.hp)
+
+    eff = effective_mods(s, p.items, items)
+
+    if p.items:
+        item_lines: list[str] = []
+        for item_id in p.items:
+            it = items.get(item_id)
+            if it is None:
+                item_lines.append(f"  - {item_id} (unknown)")
+                continue
+            effects = f" [effects: {_format_mods(it.effects)}]" if it.effects else ""
+            item_lines.append(f"  - {it.name}{effects} — {it.description}")
+        items_block = "\n".join(item_lines)
+    else:
+        items_block = "  (none)"
+
     if p.knowledge:
         knowledge_lines = "\n".join(
             f"- (turn {ke.learned_at}) {ke.text}" for ke in p.knowledge
         )
     else:
         knowledge_lines = "(none)"
+
     return (
         f"Location: {p.location_id}\n"
-        f"HP: {p.stats.hp}, AC: {p.stats.ac}, mods: {mods}\n"
-        f"Items: {items}\n\n"
+        f"HP: {hp_str}, AC: {s.ac}\n"
+        f"Abilities: STR {s.strength}, DEX {s.dexterity}, CON {s.constitution}, "
+        f"INT {s.intelligence}, WIS {s.wisdom}, CHA {s.charisma}\n"
+        f"Base mods: {_format_mods(s.mods)}\n"
+        f"Effective mods (with carried items): {_format_mods(eff)}\n"
+        f"Items:\n{items_block}\n\n"
         f"Knowledge log:\n{knowledge_lines}"
     )
 
@@ -44,11 +72,22 @@ def run_sidebar(
     player: PlayerState,
     query: str,
     *,
+    items: Mapping[str, Item] | None = None,
     model: Model | None = None,
+    world_turn: int | None = None,
 ) -> str:
     agent = build_sidebar(model)
     user_message = (
-        f"## Player state\n\n{_format_player_state(player)}\n\n"
+        f"## Player state\n\n{_format_player_state(player, items or {})}\n\n"
         f"## Question\n\n{query}"
     )
-    return agent.run_sync(user_message).output
+    start = time.monotonic()
+    result = agent.run_sync(user_message)
+    log_agent_call(
+        agent="sidebar",
+        world_turn=world_turn,
+        result=result,
+        latency_ms=(time.monotonic() - start) * 1000,
+        extra={"query": query},
+    )
+    return result.output

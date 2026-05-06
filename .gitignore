@@ -11,3 +11,6 @@ wheels/
 
 # Secrets
 .env
+
+# Per-session LLM trace logs
+traces/

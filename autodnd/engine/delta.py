@@ -60,6 +60,9 @@ class WorldDelta(BaseModel):
     player_stats: CharacterStats | None = None
     player_items_added: list[str] = Field(default_factory=list)
     player_items_removed: list[str] = Field(default_factory=list)
+    items_to_update: dict[str, str] = Field(
+        default_factory=dict
+    )  # item_id → new description
 
 
 class TurnDirective(BaseModel):
@@ -451,6 +454,12 @@ def apply_world_delta(world: WorldModel, delta: WorldDelta) -> list[ValidationEr
                 )
             )
 
+    for item_id in delta.items_to_update:
+        if item_id not in would_items:
+            errors.append(
+                _unknown(f"items_to_update[{item_id!r}]", item_id, "item", item_id)
+            )
+
     if errors:
         return errors
 
@@ -484,6 +493,9 @@ def apply_world_delta(world: WorldModel, delta: WorldDelta) -> list[ValidationEr
     world.player.items.extend(delta.player_items_added)
     for item_id in delta.player_items_removed:
         world.player.items.remove(item_id)
+
+    for item_id, new_desc in delta.items_to_update.items():
+        world.items[item_id].description = new_desc
 
     world.turn += 1
     return []

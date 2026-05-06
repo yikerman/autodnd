@@ -77,7 +77,17 @@ def inn_scene_bootstrap() -> BootstrapDirective:
                     id="hadrian",
                     name="Hadrian",
                     location_id="inn",
-                    stats=CharacterStats(hp=14, ac=11),
+                    stats=CharacterStats(
+                        hp=14,
+                        hp_max=14,
+                        ac=11,
+                        strength=11,
+                        dexterity=10,
+                        constitution=12,
+                        intelligence=11,
+                        wisdom=12,
+                        charisma=14,
+                    ),
                     description=(
                         "Ruddy innkeeper in his fifties, talkative, generous with stew. "
                         "Informant for Grell's bandit crew; sizes up travellers and "
@@ -88,7 +98,17 @@ def inn_scene_bootstrap() -> BootstrapDirective:
                     id="korel",
                     name="Spymaster Korel",
                     location_id="vellor_capital",
-                    stats=CharacterStats(hp=18, ac=12),
+                    stats=CharacterStats(
+                        hp=18,
+                        hp_max=18,
+                        ac=12,
+                        strength=10,
+                        dexterity=12,
+                        constitution=11,
+                        intelligence=16,
+                        wisdom=14,
+                        charisma=15,
+                    ),
                     description=(
                         "Vellor's spymaster. Sent Mara north with the sealed letter; "
                         "the letter contains coded intelligence on Sken troop movements."
@@ -98,21 +118,41 @@ def inn_scene_bootstrap() -> BootstrapDirective:
                     id="olwen",
                     name="Olwen",
                     location_id="sken_border_town",
-                    stats=CharacterStats(hp=16, ac=12),
+                    stats=CharacterStats(
+                        hp=16,
+                        hp_max=16,
+                        ac=12,
+                        strength=10,
+                        dexterity=13,
+                        constitution=12,
+                        intelligence=14,
+                        wisdom=13,
+                        charisma=14,
+                    ),
                     description="Vellor agent embedded in Sken. Awaits Korel's letter.",
                 ),
                 Character(
                     id="mara_father",
                     name="Tomas (deceased)",
                     location_id="heavyfall_pass",
-                    stats=CharacterStats(hp=0, ac=0),
+                    stats=CharacterStats(hp=0, hp_max=0, ac=0),
                     description="Mara's father. Killed at Heavyfall Pass in the 1047 skirmish.",
                 ),
                 Character(
                     id="grell",
                     name="Grell",
                     location_id="bandit_camp",
-                    stats=CharacterStats(hp=22, ac=14),
+                    stats=CharacterStats(
+                        hp=22,
+                        hp_max=22,
+                        ac=14,
+                        strength=15,
+                        dexterity=12,
+                        constitution=14,
+                        intelligence=10,
+                        wisdom=11,
+                        charisma=10,
+                    ),
                     description="Bandit chief. Awaits Hadrian's signal candle.",
                 ),
             ],
@@ -130,17 +170,19 @@ def inn_scene_bootstrap() -> BootstrapDirective:
                     name="gold pouch",
                     description=(
                         "Mara's purse. Heavier than she'd like — three weeks' courier "
-                        "wages plus expense money."
+                        "wages plus expense money. Contains 50 gp."
                     ),
                 ),
-                Item(id="shortsword", name="shortsword", description="Plain blade, well-kept."),
+                Item(
+                    id="shortsword",
+                    name="shortsword",
+                    description="Plain blade, well-kept.",
+                ),
                 Item(
                     id="persuasion_skill",
                     name="persuasion (skill)",
-                    description=(
-                        "Trained ability — Mara can read a room. "
-                        "(Mechanical bonus lives in player.stats.mods.persuasion.)"
-                    ),
+                    description="Trained ability — Mara can read a room.",
+                    effects={"persuasion": 2},
                 ),
             ],
         ),
@@ -275,7 +317,18 @@ def inn_scene_bootstrap() -> BootstrapDirective:
         ],
         initial_player_state=PlayerState(
             location_id="inn",
-            stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2}),
+            stats=CharacterStats(
+                hp=24,
+                hp_max=24,
+                ac=13,
+                strength=11,
+                dexterity=14,
+                constitution=13,
+                intelligence=12,
+                wisdom=13,
+                charisma=14,
+                # persuasion +2 lives on the persuasion_skill item's effects
+            ),
             items=["sealed_letter", "gold_pouch", "shortsword", "persuasion_skill"],
         ),
         opening_beats=[

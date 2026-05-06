@@ -19,6 +19,9 @@ class Item(BaseModel):
     id: str
     name: str
     description: str
+    effects: dict[str, int] = Field(
+        default_factory=dict
+    )  # bonuses granted while carried (e.g. {"persuasion": 2})
 
 
 class Location(BaseModel):
@@ -30,7 +33,16 @@ class Location(BaseModel):
 class CharacterStats(BaseModel):
     hp: int
     ac: int
-    mods: dict[str, int] = Field(default_factory=dict)
+    hp_max: int = 0  # 0 = unbounded healing; positive = max HP cap
+    strength: int = 10
+    dexterity: int = 10
+    constitution: int = 10
+    intelligence: int = 10
+    wisdom: int = 10
+    charisma: int = 10
+    mods: dict[str, int] = Field(
+        default_factory=dict
+    )  # ad-hoc bonuses (skills, saves, etc.)
 
 
 class Character(BaseModel):

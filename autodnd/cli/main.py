@@ -25,6 +25,7 @@ from autodnd.engine.delta import (
 )
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
 from autodnd.fixtures import inn_scene_bootstrap
+from autodnd.llm import tracing
 from autodnd.llm.director import run_bootstrap_director, run_turn_director
 from autodnd.llm.narrator import run_narrator
 from autodnd.llm.sidebar import run_sidebar
@@ -42,8 +43,11 @@ AutoDND — solo one-shot DM. Type your action, or:
 """
 
 SLASH_FAST_QUERIES = {
-    "/hp": "What's my HP?",
-    "/log": "Summarize what I've experienced so far.",
+    "/hp": "What's my HP, AC, and ability scores?",
+    "/log": (
+        "List the events I've experienced so far in chronological order, one line each. "
+        "Story timeline only — do NOT include HP, stats, modifiers, location, or inventory."
+    ),
     "/inv": "What's in my inventory?",
 }
 
@@ -82,9 +86,7 @@ def run_turn(
         retry_input = (
             f"{player_input}\n\n"
             "## Your previous directive was rejected\n\n"
-            + "\n".join(
-                f"- {e.code} at `{e.field_path}`: {e.detail}" for e in errors
-            )
+            + "\n".join(f"- {e.code} at `{e.field_path}`: {e.detail}" for e in errors)
             + "\n\nRevise and emit a valid directive."
         )
         directive = run_turn_director(world, retry_input, prior_prose, rng)
@@ -95,7 +97,7 @@ def run_turn(
     if not directive.beats:
         return "[the DM pauses, awaiting clearer intent]"
 
-    return run_narrator(directive.beats, narration_history)
+    return run_narrator(directive.beats, narration_history, world_turn=world.turn)
 
 
 def handle_slash(line: str, world: WorldModel) -> str:
@@ -106,10 +108,17 @@ def handle_slash(line: str, world: WorldModel) -> str:
         case "/quit" | "/exit":
             raise SystemExit(0)
         case "/hp" | "/log" | "/inv":
-            return run_sidebar(world.player, SLASH_FAST_QUERIES[cmd])
+            return run_sidebar(
+                world.player,
+                SLASH_FAST_QUERIES[cmd],
+                items=world.items,
+                world_turn=world.turn,
+            )
         case "/ask":
             query = rest.strip() or "What's my current status?"
-            return run_sidebar(world.player, query)
+            return run_sidebar(
+                world.player, query, items=world.items, world_turn=world.turn
+            )
         case _:
             return f"Unknown command: {cmd}. Try /help."
 
@@ -155,9 +164,7 @@ def _rl_safe(seq: str) -> str:
 
 # Prompt = bold-green "> "; readline-safe escape transition into bold-cyan so
 # the user's keystrokes echo in cyan until we reset on Enter.
-_PROMPT = (
-    _rl_safe(str(T.bold_green)) + "> " + _rl_safe(str(T.bold_cyan))
-)
+_PROMPT = _rl_safe(str(T.bold_green)) + "> " + _rl_safe(str(T.bold_cyan))
 
 
 def _read_input() -> str | None:
@@ -165,7 +172,7 @@ def _read_input() -> str | None:
     free from `readline` having been imported at module top."""
     try:
         line = input(_PROMPT)
-    except (EOFError, KeyboardInterrupt):
+    except EOFError, KeyboardInterrupt:
         sys.stdout.write(str(T.normal))
         sys.stdout.flush()
         print()
@@ -180,10 +187,14 @@ def main() -> None:
     args = parse_args()
     rng = random.Random()
 
+    trace_path = tracing.init()
+
     _print_block(BANNER, kind="banner")
+    if trace_path:
+        print(T.bright_black(f"Trace log: {trace_path}"), file=sys.stderr)
     print(T.bright_black("Initializing world…"), file=sys.stderr)
     world, directive = initialize_session(demo_scene=args.demo_scene, rng=rng)
-    opening_prose = run_narrator(directive.opening_beats, [])
+    opening_prose = run_narrator(directive.opening_beats, [], world_turn=world.turn)
     narration_history: list[str] = [opening_prose]
     prior_prose = opening_prose
 

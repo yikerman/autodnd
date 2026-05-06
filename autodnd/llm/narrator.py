@@ -1,10 +1,13 @@
 """Narrator agent: restyles directive beats into prose. No tools, no world access."""
 
+import time
+
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
 from autodnd.engine.delta import Beat
 from autodnd.llm import load_prompt, model_from_env
+from autodnd.llm.tracing import log_agent_call
 
 
 def build_narrator(model: Model | None = None) -> Agent[None, str]:
@@ -30,6 +33,7 @@ def run_narrator(
     narration_history: list[str],
     *,
     model: Model | None = None,
+    world_turn: int | None = None,
 ) -> str:
     agent = build_narrator(model)
     history_block = (
@@ -43,4 +47,12 @@ def run_narrator(
         "## Beats to restyle\n\n"
         f"{_format_beats(beats)}"
     )
-    return agent.run_sync(user_message).output
+    start = time.monotonic()
+    result = agent.run_sync(user_message)
+    log_agent_call(
+        agent="narrator",
+        world_turn=world_turn,
+        result=result,
+        latency_ms=(time.monotonic() - start) * 1000,
+    )
+    return result.output

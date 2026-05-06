@@ -5,6 +5,7 @@ Both share the same dice tools, but emit different output types:
 """
 
 import random
+import time
 from dataclasses import dataclass
 
 from pydantic_ai import Agent, RunContext
@@ -14,9 +15,16 @@ from pydantic_ai.output import PromptedOutput
 from autodnd.engine.delta import BootstrapDirective, TurnDirective
 from autodnd.engine.render import render_omniscient
 from autodnd.engine.resolution import Resolution
-from autodnd.engine.rules import resolve_attack, resolve_check, resolve_save, roll
+from autodnd.engine.rules import (
+    effective_mods,
+    resolve_attack,
+    resolve_check,
+    resolve_save,
+    roll,
+)
 from autodnd.engine.world import WorldModel
 from autodnd.llm import load_prompt, model_from_env
+from autodnd.llm.tracing import log_agent_call
 
 
 @dataclass
@@ -25,7 +33,9 @@ class DirectorDeps:
     rng: random.Random
 
 
-def build_bootstrap_director(model: Model | None = None) -> Agent[DirectorDeps, BootstrapDirective]:
+def build_bootstrap_director(
+    model: Model | None = None,
+) -> Agent[DirectorDeps, BootstrapDirective]:
     # PromptedOutput puts the schema in the system prompt instead of forcing
     # tool_choice — works with reasoner models (DeepSeek, o1) that reject the
     # `required` tool_choice the default ToolOutput uses.
@@ -37,7 +47,9 @@ def build_bootstrap_director(model: Model | None = None) -> Agent[DirectorDeps, 
     )
 
 
-def build_turn_director(model: Model | None = None) -> Agent[DirectorDeps, TurnDirective]:
+def build_turn_director(
+    model: Model | None = None,
+) -> Agent[DirectorDeps, TurnDirective]:
     agent = Agent(
         model or model_from_env(),
         deps_type=DirectorDeps,
@@ -52,18 +64,26 @@ def build_turn_director(model: Model | None = None) -> Agent[DirectorDeps, TurnD
 
     @agent.tool
     def check(ctx: RunContext[DirectorDeps], skill: str, dc: int) -> Resolution:
-        """Resolve a player skill check: d20 + ``stats.mods[skill]`` vs DC."""
-        return resolve_check(skill, dc, ctx.deps.world.player.stats.mods, ctx.deps.rng)
+        """Resolve a player skill check: d20 + bonus vs DC. Bonus is ``stats.mods[skill]``
+        plus the sum of ``effects[skill]`` from every carried item."""
+        world = ctx.deps.world
+        mods = effective_mods(world.player.stats, world.player.items, world.items)
+        return resolve_check(skill, dc, mods, ctx.deps.rng)
 
     @agent.tool
-    def attack(ctx: RunContext[DirectorDeps], attack_mod: int, target_ac: int) -> Resolution:
+    def attack(
+        ctx: RunContext[DirectorDeps], attack_mod: int, target_ac: int
+    ) -> Resolution:
         """Resolve an attack roll: d20 + ``attack_mod`` vs ``target_ac``."""
         return resolve_attack(attack_mod, target_ac, ctx.deps.rng)
 
     @agent.tool
     def save(ctx: RunContext[DirectorDeps], save_kind: str, dc: int) -> Resolution:
-        """Resolve a player saving throw: d20 + ``stats.mods[save_kind]`` vs DC."""
-        return resolve_save(save_kind, dc, ctx.deps.world.player.stats.mods, ctx.deps.rng)
+        """Resolve a player saving throw: d20 + bonus vs DC. Bonus is ``stats.mods[save_kind]``
+        plus the sum of ``effects[save_kind]`` from every carried item."""
+        world = ctx.deps.world
+        mods = effective_mods(world.player.stats, world.player.items, world.items)
+        return resolve_save(save_kind, dc, mods, ctx.deps.rng)
 
     return agent
 
@@ -77,7 +97,15 @@ def run_bootstrap_director(
     """Mint the initial world. ``world`` is unused but accepted for symmetry with deps."""
     agent = build_bootstrap_director(model)
     deps = DirectorDeps(world=world or _placeholder_world(), rng=rng)
-    return agent.run_sync("Begin a new session. Mint the initial world.", deps=deps).output
+    start = time.monotonic()
+    result = agent.run_sync("Begin a new session. Mint the initial world.", deps=deps)
+    log_agent_call(
+        agent="bootstrap_director",
+        world_turn=-1,
+        result=result,
+        latency_ms=(time.monotonic() - start) * 1000,
+    )
+    return result.output
 
 
 def run_turn_director(
@@ -95,7 +123,16 @@ def run_turn_director(
         f"{prior_prose or '(no prior turn — this is the first.)'}\n\n"
         f"## Player input\n\n{player_input}"
     )
-    return agent.run_sync(user_message, deps=DirectorDeps(world=world, rng=rng)).output
+    start = time.monotonic()
+    result = agent.run_sync(user_message, deps=DirectorDeps(world=world, rng=rng))
+    log_agent_call(
+        agent="turn_director",
+        world_turn=world.turn,
+        result=result,
+        latency_ms=(time.monotonic() - start) * 1000,
+        extra={"player_input": player_input},
+    )
+    return result.output
 
 
 def _placeholder_world() -> WorldModel:

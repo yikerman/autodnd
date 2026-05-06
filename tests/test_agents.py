@@ -150,7 +150,9 @@ def test_turn_director_roll_tool_dispatches_to_engine():
         # The most recent tool return holds the engine's roll.
         for m in messages:
             for part in getattr(m, "parts", []):
-                if getattr(part, "tool_name", None) == "roll_dice" and hasattr(part, "content"):
+                if getattr(part, "tool_name", None) == "roll_dice" and hasattr(
+                    part, "content"
+                ):
                     captured_roll.append(int(part.content))  # type: ignore[arg-type]
         return ModelResponse(parts=[TextPart(json.dumps(TurnDirective().model_dump()))])
 

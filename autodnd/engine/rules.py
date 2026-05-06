@@ -15,9 +15,10 @@ Spell mechanics, action economy, and RAW initiative are out of scope.
 
 import random
 import re
+from collections.abc import Iterable, Mapping
 
 from autodnd.engine.resolution import Resolution
-from autodnd.engine.world import CharacterStats
+from autodnd.engine.world import CharacterStats, Item
 
 _DICE_SPEC = re.compile(r"^\s*(\d*)d(\d+)\s*([+-]\s*\d+)?\s*$", re.IGNORECASE)
 
@@ -99,10 +100,30 @@ def resolve_save(
     )
 
 
+def effective_mods(
+    stats: CharacterStats,
+    carried_item_ids: Iterable[str],
+    items: Mapping[str, Item],
+) -> dict[str, int]:
+    """Sum ``stats.mods`` with the ``effects`` of every carried item that exists
+    in ``items``. Missing item ids are skipped silently."""
+    result: dict[str, int] = dict(stats.mods)
+    for item_id in carried_item_ids:
+        item = items.get(item_id)
+        if item is None:
+            continue
+        for k, v in item.effects.items():
+            result[k] = result.get(k, 0) + v
+    return result
+
+
 def apply_damage(stats: CharacterStats, damage: int) -> CharacterStats:
     """Return a new ``CharacterStats`` with HP reduced by ``damage``, clamped at 0.
 
-    Negative damage = healing; MVP doesn't track max HP, so no upper clamp.
+    Negative damage = healing. If ``stats.hp_max > 0``, healing is capped at
+    ``hp_max``; if ``hp_max == 0`` (the default), healing is unbounded.
     """
     new_hp = max(stats.hp - damage, 0)
+    if stats.hp_max > 0:
+        new_hp = min(new_hp, stats.hp_max)
     return stats.model_copy(update={"hp": new_hp})

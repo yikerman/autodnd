@@ -222,6 +222,36 @@ def test_apply_delta_thread_description_update():
     )
 
 
+def test_apply_delta_item_description_update():
+    """Mutable item state: pouch loses gold after a transaction."""
+    world = _bootstrapped_world()
+    delta = WorldDelta(items_to_update={"sword": "Plain blade, well-kept. Bloodied."})
+    assert apply_world_delta(world, delta) == []
+    assert world.items["sword"].description == "Plain blade, well-kept. Bloodied."
+
+
+def test_apply_delta_rejects_update_of_unknown_item():
+    world = _bootstrapped_world()
+    delta = WorldDelta(items_to_update={"ghost_sword": "anything"})
+    errors = apply_world_delta(world, delta)
+    assert any(
+        e.code == "unknown_ref" and "items_to_update" in e.field_path for e in errors
+    )
+
+
+def test_apply_delta_can_create_then_update_item_in_same_delta():
+    """An item minted in entities_to_create can be referenced by items_to_update."""
+    world = _bootstrapped_world()
+    delta = WorldDelta(
+        entities_to_create=EntitiesToCreate(
+            items=[Item(id="potion", name="potion", description="3 charges remain.")]
+        ),
+        items_to_update={"potion": "2 charges remain."},
+    )
+    assert apply_world_delta(world, delta) == []
+    assert world.items["potion"].description == "2 charges remain."
+
+
 def test_apply_delta_character_move_and_stats():
     world = _bootstrapped_world()
     delta = WorldDelta(

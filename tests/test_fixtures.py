@@ -32,7 +32,9 @@ def test_inn_scene_bootstrap_produces_expected_world():
     assert len(world.player.knowledge) == 5
 
     assert world.player.location_id == "inn"
-    assert world.player.stats.mods["persuasion"] == 2
+    # persuasion +2 lives on the persuasion_skill item, not on stats.mods
+    assert world.items["persuasion_skill"].effects == {"persuasion": 2}
+    assert "persuasion_skill" in world.player.items
     assert "sealed_letter" in world.player.items
 
     # Thread forest: vellor_sken_tensions → courier_mission → inn_night

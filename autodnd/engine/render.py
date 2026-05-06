@@ -24,7 +24,8 @@ Shape::
     ## Player
 """
 
-from autodnd.engine.world import Event, Thread, WorldModel
+from autodnd.engine.rules import effective_mods
+from autodnd.engine.world import CharacterStats, Event, Thread, WorldModel
 
 
 def render_omniscient(world: WorldModel) -> str:
@@ -103,10 +104,9 @@ def render_omniscient(world: WorldModel) -> str:
         lines.append("(none)")
     for char in sorted(world.characters.values(), key=lambda c: c.id):
         loc_name = name_of_loc.get(char.location_id, char.location_id)
-        mods_str = _format_mods(char.stats.mods)
         lines.append(
             f"- **{char.name}** (id=`{char.id}`) @ {loc_name} (id=`{char.location_id}`) "
-            f"— HP {char.stats.hp}, AC {char.stats.ac}, mods: {mods_str}"
+            f"— {_format_stats(char.stats)}"
         )
         lines.append(f"  {char.description}")
     lines.append("")
@@ -124,17 +124,22 @@ def render_omniscient(world: WorldModel) -> str:
     if not world.items:
         lines.append("(none)")
     for item in sorted(world.items.values(), key=lambda x: x.id):
-        lines.append(f"- **{item.name}** (id=`{item.id}`) — {item.description}")
+        effects_str = (
+            f" [effects: {_format_mods(item.effects)}]" if item.effects else ""
+        )
+        lines.append(
+            f"- **{item.name}** (id=`{item.id}`){effects_str} — {item.description}"
+        )
     lines.append("")
 
     lines.append("## Player")
     lines.append("")
     p = world.player
     p_loc_name = name_of_loc.get(p.location_id, p.location_id)
+    eff = effective_mods(p.stats, p.items, world.items)
     lines.append(f"Location: {p_loc_name} (id=`{p.location_id}`)")
-    lines.append(
-        f"Stats: HP {p.stats.hp}, AC {p.stats.ac}, mods: {_format_mods(p.stats.mods)}"
-    )
+    lines.append(f"Stats: {_format_stats(p.stats)}")
+    lines.append(f"Effective mods (stats + carried items): {_format_mods(eff)}")
     items_str = ", ".join(f"`{i}`" for i in p.items) if p.items else "—"
     lines.append(f"Items: {items_str}")
     lines.append("")
@@ -155,3 +160,12 @@ def _format_mods(mods: dict[str, int]) -> str:
     if not mods:
         return "—"
     return ", ".join(f"{k}{v:+d}" for k, v in sorted(mods.items()))
+
+
+def _format_stats(s: CharacterStats) -> str:
+    hp_part = f"HP {s.hp}/{s.hp_max}" if s.hp_max > 0 else f"HP {s.hp}"
+    abilities = (
+        f"STR {s.strength}, DEX {s.dexterity}, CON {s.constitution}, "
+        f"INT {s.intelligence}, WIS {s.wisdom}, CHA {s.charisma}"
+    )
+    return f"{hp_part}, AC {s.ac}, {abilities}, mods: {_format_mods(s.mods)}"
