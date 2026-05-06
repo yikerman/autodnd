@@ -20,10 +20,16 @@ from autodnd.engine.world import (
 def _build_minimal_world() -> WorldModel:
     return WorldModel(
         locations={
-            "inn": Location(id="inn", name="Crow's Foot Inn", description="Roadside inn at dusk."),
+            "inn": Location(
+                id="inn", name="Crow's Foot Inn", description="Roadside inn at dusk."
+            ),
         },
         items={
-            "shortsword": Item(id="shortsword", name="shortsword", description="Plain blade, well-kept."),
+            "shortsword": Item(
+                id="shortsword",
+                name="shortsword",
+                description="Plain blade, well-kept.",
+            ),
         },
         characters={
             "hadrian": Character(
@@ -58,7 +64,9 @@ def _build_minimal_world() -> WorldModel:
             stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2}),
             items=["shortsword"],
             knowledge=[
-                KnowledgeEntry(event_id="e0", text="You reached the inn at dusk.", learned_at=-1),
+                KnowledgeEntry(
+                    event_id="e0", text="You reached the inn at dusk.", learned_at=-1
+                ),
             ],
         ),
         turn=0,
@@ -89,7 +97,11 @@ def test_loads_worked_example_shaped_payload():
     a BootstrapDirective would land in WorldModel after apply."""
     payload = {
         "locations": {
-            "inn": {"id": "inn", "name": "Crow's Foot Inn", "description": "Roadside inn at dusk."},
+            "inn": {
+                "id": "inn",
+                "name": "Crow's Foot Inn",
+                "description": "Roadside inn at dusk.",
+            },
             "vellor_capital": {
                 "id": "vellor_capital",
                 "name": "Vellor capital",
