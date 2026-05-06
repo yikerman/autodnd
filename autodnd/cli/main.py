@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import argparse
 import random
+import readline  # noqa: F401  # imported for its side effect: arrow-key line editing in input()
 import sys
 
+from blessed import Terminal
 from dotenv import load_dotenv
 
 from autodnd.engine.delta import (
@@ -26,6 +28,8 @@ from autodnd.fixtures import inn_scene_bootstrap
 from autodnd.llm.director import run_bootstrap_director, run_turn_director
 from autodnd.llm.narrator import run_narrator
 from autodnd.llm.sidebar import run_sidebar
+
+T = Terminal()
 
 BANNER = """\
 AutoDND — solo one-shot DM. Type your action, or:
@@ -120,43 +124,95 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _is_status_message(text: str) -> bool:
+    """True for the bracket-prefixed engine messages run_turn returns when there's
+    nothing to narrate — used to style them differently from real prose."""
+    return text.startswith("[") and text.endswith("]") and "\n" not in text
+
+
+def _print_block(text: str, *, kind: str = "prose") -> None:
+    """Print a standalone output block with appropriate color."""
+    if kind == "banner":
+        styled = T.cyan(text)
+    elif kind == "sidebar":
+        styled = T.yellow(text)
+    elif kind == "error":
+        styled = T.bright_red(text)
+    elif kind == "status":
+        styled = T.bright_black(text)
+    else:  # prose
+        styled = text
+    print()
+    print(styled)
+    print()
+
+
+def _rl_safe(seq: str) -> str:
+    """Wrap an ANSI escape so readline counts it as zero-width when computing
+    cursor positions during line editing / history recall."""
+    return f"\001{seq}\002"
+
+
+# Prompt = bold-green "> "; readline-safe escape transition into bold-cyan so
+# the user's keystrokes echo in cyan until we reset on Enter.
+_PROMPT = (
+    _rl_safe(str(T.bold_green)) + "> " + _rl_safe(str(T.bold_cyan))
+)
+
+
+def _read_input() -> str | None:
+    """Prompt the user. Returns None on EOF / Ctrl-C. Arrow keys + history come
+    free from `readline` having been imported at module top."""
+    try:
+        line = input(_PROMPT)
+    except (EOFError, KeyboardInterrupt):
+        sys.stdout.write(str(T.normal))
+        sys.stdout.flush()
+        print()
+        return None
+    sys.stdout.write(str(T.normal))
+    sys.stdout.flush()
+    return line.strip()
+
+
 def main() -> None:
     load_dotenv()
     args = parse_args()
     rng = random.Random()
 
-    print(BANNER)
-    print()
-    print("Initializing world…", file=sys.stderr)
+    _print_block(BANNER, kind="banner")
+    print(T.bright_black("Initializing world…"), file=sys.stderr)
     world, directive = initialize_session(demo_scene=args.demo_scene, rng=rng)
     opening_prose = run_narrator(directive.opening_beats, [])
     narration_history: list[str] = [opening_prose]
     prior_prose = opening_prose
 
-    print()
-    print(opening_prose)
-    print()
+    _print_block(opening_prose, kind="prose")
 
     while True:
-        try:
-            line = input("> ").strip()
-        except EOFError, KeyboardInterrupt:
-            print()
+        line = _read_input()
+        if line is None:
             return
         if not line:
             continue
         try:
             if line.startswith("/"):
                 output = handle_slash(line, world)
+                kind = "banner" if line in {"/help"} else "sidebar"
+                _print_block(output, kind=kind)
             else:
                 output = run_turn(world, line, prior_prose, narration_history, rng)
-                prior_prose = output
-                narration_history.append(output)
+                if _is_status_message(output):
+                    _print_block(
+                        output,
+                        kind="error" if "error" in output.lower() else "status",
+                    )
+                else:
+                    prior_prose = output
+                    narration_history.append(output)
+                    _print_block(output, kind="prose")
         except SystemExit:
             return
-        print()
-        print(output)
-        print()
 
 
 if __name__ == "__main__":
