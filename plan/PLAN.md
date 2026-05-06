@@ -284,7 +284,7 @@ See [example.md](./example.md) — three-turn trace through a Crow's Foot Inn sc
 - **Skills as items, modifiers on stats.** `Item` description carries flavor only. The mechanical bonus lives in `stats.mods` (e.g. `mods["persuasion"] = 2`); `resolve_check` reads from there.
 - **Pacing:** Director decides per turn; no engine-side tension counter, no separate scene-boundary cadence.
 - **LLM access:** **PydanticAI**. Provider-agnostic by design, native structured output, clean tool-use. All three call sites (Director / Narrator / Sidebar) go through it.
-- **Model split (proposed):** Director on Sonnet (structured output, plot reasoning), Narrator on Opus (prose quality), Sidebar on Sonnet. Tunable.
+- **Model:** single OpenAI-compatible endpoint for all three agents, configured via `MODEL_ENDPOINT` / `MODEL_KEY` / `MODEL_NAME` in `.env`. Per-agent model split is a future option.
 - **Bootstrap:** distinct `BootstrapDirective` (own schema) emitted by one Director call at `world.turn = -1`. Includes `opening_beats` so the first Narrator call uses the same contract as every turn.
 - **Event id / `t` ownership:** Director emits both; engine validates uniqueness and monotonicity. Lets directives self-reference freshly minted events (`knowledge_to_append.event_id` → same-delta event).
 - **`entities_to_create` shape:** dict-of-lists (`EntitiesToCreate` sub-model with `locations`, `characters`, `items`).

@@ -27,7 +27,7 @@ Deterministic program wrapped around a creative oracle, with **structural** defe
 - **Skills as items, mods on stats.** `Item` description is flavor; the mechanical bonus lives in `stats.mods` (`resolve_check` reads from there).
 - **Speaker is a display name** (`"Hadrian"`), not a character id. Director resolves at emission.
 - **No compaction in MVP.** Each LLM gets all of what it needs and only what it needs.
-- **PydanticAI** for all three call sites.
+- **PydanticAI** for all three call sites; single OpenAI-compatible endpoint via `MODEL_ENDPOINT` / `MODEL_KEY` / `MODEL_NAME`.
 
 ## Conventions
 
