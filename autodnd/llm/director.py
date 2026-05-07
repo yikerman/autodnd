@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass, field
 
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models import Model
 
 from autodnd.engine.delta import (
@@ -322,4 +323,14 @@ def run_director(
         result=result,
         latency_ms=(time.monotonic() - start) * 1000,
     )
-    return result.output
+    # Concatenate every TextPart across all model responses. The model may emit
+    # prose both before and after tool calls in the same run; `result.output`
+    # only carries the final text part, so prose written before a tool call
+    # would otherwise be lost.
+    chunks: list[str] = []
+    for msg in result.all_messages():
+        if isinstance(msg, ModelResponse):
+            for part in msg.parts:
+                if isinstance(part, TextPart) and part.content:
+                    chunks.append(part.content)
+    return "\n\n".join(chunks)

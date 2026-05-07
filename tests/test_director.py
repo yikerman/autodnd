@@ -26,6 +26,7 @@ from autodnd.llm.director import (
     DirectorDeps,
     bootstrap_user_message,
     build_director,
+    run_director,
     turn_user_message,
 )
 
@@ -135,6 +136,41 @@ def test_director_mark_end_scene_records_turn():
     agent.run_sync("test", deps=deps)
 
     assert boundaries == [7]
+
+
+def test_run_director_concatenates_prose_before_and_after_tool_calls():
+    """When the model emits prose both before AND after a tool call, both
+    chunks must reach the player. Regression for a turn where only the
+    post-tool-call coda was returned, leaving the player without context."""
+    world = _seeded_world()
+
+    step = {"n": 0}
+
+    def model_fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        step["n"] += 1
+        if step["n"] == 1:
+            return ModelResponse(
+                parts=[
+                    TextPart("First chunk: directions to Mawley."),
+                    ToolCallPart(
+                        tool_name="append_player_log",
+                        args={"text": "Hadrian gave directions."},
+                        tool_call_id="call_1",
+                    ),
+                ]
+            )
+        return ModelResponse(parts=[TextPart("Second chunk: the question hangs.")])
+
+    output = run_director(
+        world,
+        "test",
+        random.Random(42),
+        model=FunctionModel(model_fn),
+    )
+
+    assert "First chunk: directions to Mawley." in output
+    assert "Second chunk: the question hangs." in output
+    assert output.index("First chunk") < output.index("Second chunk")
 
 
 def test_bootstrap_user_message_signals_bootstrap_mode():

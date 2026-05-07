@@ -10,10 +10,12 @@ import argparse
 import random
 import readline  # noqa: F401  # imported for its side effect: arrow-key line editing in input()
 import sys
+from pathlib import Path
 
 from blessed import Terminal
 from dotenv import load_dotenv
 
+from autodnd.cli.persistence import load_session, save_session
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
 from autodnd.fixtures import seed_inn_scene
 from autodnd.llm import tracing
@@ -28,12 +30,13 @@ T = Terminal()
 
 BANNER = """\
 AutoDND — solo one-shot DM. Type your action, or:
-  /hp       — show your HP
-  /log      — show recent events
-  /inv      — show inventory
-  /ask Q    — free-form sidebar question
-  /help     — this banner
-  /quit     — exit
+  /hp        — show your HP
+  /log       — show recent events
+  /inv       — show inventory
+  /ask Q     — free-form sidebar question
+  /save FILE — dump session to FILE and exit (resume with --load FILE)
+  /help      — this banner
+  /quit      — exit
 """
 
 SLASH_FAST_QUERIES = {
@@ -114,10 +117,17 @@ def handle_slash(line: str, world: WorldModel) -> str:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="autodnd", description=__doc__)
-    parser.add_argument(
+    start = parser.add_mutually_exclusive_group()
+    start.add_argument(
         "--demo-scene",
         action="store_true",
         help="use the hardcoded Crow's Foot Inn fixture instead of LLM bootstrap",
+    )
+    start.add_argument(
+        "--load",
+        metavar="FILE",
+        type=Path,
+        help="resume a session previously written by /save",
     )
     return parser.parse_args(argv)
 
@@ -180,13 +190,23 @@ def main() -> None:
     _print_block(BANNER, kind="banner")
     if trace_path:
         print(T.bright_black(f"Trace log: {trace_path}"), file=sys.stderr)
-    print(T.bright_black("Initializing world…"), file=sys.stderr)
-    world, opening_prose, scene_boundaries = initialize_session(
-        demo_scene=args.demo_scene, rng=rng
-    )
 
-    prior_prose = opening_prose
-    _print_block(opening_prose, kind="prose")
+    if args.load is not None:
+        print(T.bright_black(f"Loading session from {args.load}…"), file=sys.stderr)
+        snap = load_session(args.load)
+        world, prior_prose, scene_boundaries = (
+            snap.world,
+            snap.prior_prose,
+            snap.scene_boundaries,
+        )
+        _print_block(prior_prose, kind="prose")
+    else:
+        print(T.bright_black("Initializing world…"), file=sys.stderr)
+        world, opening_prose, scene_boundaries = initialize_session(
+            demo_scene=args.demo_scene, rng=rng
+        )
+        prior_prose = opening_prose
+        _print_block(opening_prose, kind="prose")
 
     while True:
         line = _read_input()
@@ -195,6 +215,28 @@ def main() -> None:
         if not line:
             continue
         try:
+            if line.startswith("/save"):
+                _, _, rest = line.partition(" ")
+                target = rest.strip()
+                if not target:
+                    _print_block("Usage: /save <file>", kind="error")
+                    continue
+                path = Path(target)
+                try:
+                    save_session(
+                        path,
+                        world=world,
+                        prior_prose=prior_prose,
+                        scene_boundaries=scene_boundaries,
+                    )
+                except OSError as e:
+                    _print_block(f"Save failed: {e}", kind="error")
+                    continue
+                _print_block(
+                    f"Saved to {path}. Resume with: autodnd --load {path}",
+                    kind="status",
+                )
+                return
             if line.startswith("/"):
                 output = handle_slash(line, world)
                 kind = "banner" if line == "/help" else "sidebar"
