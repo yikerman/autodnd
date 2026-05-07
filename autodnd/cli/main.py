@@ -54,17 +54,16 @@ def _empty_world() -> WorldModel:
     )
 
 
-def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str, list[int]]:
-    """Returns (seeded world, opening prose, scene_boundaries).
+def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str]:
+    """Returns (seeded world, opening prose).
 
     Demo path uses the hardcoded fixture. LLM path runs the Bootstrapper in a
     Q&A loop until it calls ``begin_play`` (which flips ``world.turn`` to 0);
     the prose from that final turn is the opening narration.
     """
     world = _empty_world()
-    scene_boundaries: list[int] = []
     if demo_scene:
-        return world, seed_inn_scene(world), scene_boundaries
+        return world, seed_inn_scene(world)
 
     history: list[ModelMessage] = []
     user_msg = bootstrap_user_message()
@@ -74,7 +73,7 @@ def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str, list[int]]
         )
         _print_block(prose, kind="prose")
         if world.turn == 0:
-            return world, prose, scene_boundaries
+            return world, prose
         line = _read_input()
         if line is None:
             raise SystemExit(0)
@@ -88,15 +87,13 @@ def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str, list[int]]
 def run_turn(
     world: WorldModel,
     player_input: str,
-    prior_prose: str,
+    prior_prose: list[str],
     rng: random.Random,
-    scene_boundaries: list[int],
 ) -> str:
     prose = run_director(
         world,
         turn_user_message(world, player_input, prior_prose),
         rng,
-        scene_boundaries=scene_boundaries,
     )
     world.turn += 1
     return prose
@@ -204,18 +201,13 @@ def main() -> None:
     if args.load is not None:
         print(T.bright_black(f"Loading session from {args.load}…"), file=sys.stderr)
         snap = load_session(args.load)
-        world, prior_prose, scene_boundaries = (
-            snap.world,
-            snap.prior_prose,
-            snap.scene_boundaries,
-        )
-        _print_block(prior_prose, kind="prose")
+        world, prior_prose = snap.world, snap.prior_prose
+        if prior_prose:
+            _print_block(prior_prose[-1], kind="prose")
     else:
         print(T.bright_black("Initializing world…"), file=sys.stderr)
-        world, opening_prose, scene_boundaries = initialize_session(
-            demo_scene=args.demo_scene
-        )
-        prior_prose = opening_prose
+        world, opening_prose = initialize_session(demo_scene=args.demo_scene)
+        prior_prose = [opening_prose]
         # Demo path prints opening here. LLM path's bootstrapper loop already
         # printed each turn (including the opening), so suppress duplicate.
         if args.demo_scene:
@@ -240,7 +232,6 @@ def main() -> None:
                         path,
                         world=world,
                         prior_prose=prior_prose,
-                        scene_boundaries=scene_boundaries,
                     )
                 except OSError as e:
                     _print_block(f"Save failed: {e}", kind="error")
@@ -255,14 +246,14 @@ def main() -> None:
                 kind = "banner" if line == "/help" else "sidebar"
                 _print_block(output, kind=kind)
             else:
-                output = run_turn(world, line, prior_prose, rng, scene_boundaries)
+                output = run_turn(world, line, prior_prose, rng)
                 if _is_status_message(output):
                     _print_block(
                         output,
                         kind="error" if "error" in output.lower() else "status",
                     )
                 else:
-                    prior_prose = output
+                    prior_prose.append(output)
                     _print_block(output, kind="prose")
         except SystemExit:
             return

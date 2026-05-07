@@ -1,0 +1,330 @@
+{
+  "world": {
+    "locations": {
+      "duskfall": {
+        "id": "duskfall",
+        "name": "Duskfall",
+        "description": "A frontier town of timber and muddy streets where the human kingdom of Aethelmark meets the untamed wilds. The palisade walls are newly reinforced. The air smells of woodsmoke, wet earth, and something else — tension. A few hundred souls live here: farmers, trappers, garrison soldiers, a handful of non-humans who get wary glances. At the town's heart stands the Rusty Antler tavern and a small shrine to a god of travelers. The road west leads deeper into Aethelmark; east and north, it vanishes into forest and foothills. Unmarked graves on a hill outside town are filling faster than anyone wants to admit."
+      },
+      "rusty_antler": {
+        "id": "rusty_antler",
+        "name": "The Rusty Antler",
+        "description": "A two-story tavern built from reclaimed timber, its signboard showing a chipped antler against a setting sun. Warm firelight spills from grimy windows. Inside: a long oak bar, mismatched tables, a stone hearth large enough to roast a whole deer. The floorboards creak in specific, intentional places — Marta knows every one. The upstairs holds four rentable rooms, thin-walled. Regulars include off-duty garrison soldiers, nervous farmers, and one very quiet dwarf who doesn't talk about where he came from."
+      },
+      "wyrmfang_peaks": {
+        "id": "wyrmfang_peaks",
+        "name": "The Wyrmfang Peaks",
+        "description": "A jagged mountain range that forms the eastern boundary of the frontier. Grey stone, scree slopes, pine forests clinging to the lower altitudes, bare rock above the treeline. The peaks are said to resemble dragon's teeth from certain angles — hence the name. Old dwarven roads wind through the lower passes, but higher up, nothing. Strange lights have been reported on moonless nights. Hunters who venture too deep sometimes don't return, or return wrong. Somewhere in the high crags, a cave system older than any kingdom tunnels deep into the mountain's heart."
+      },
+      "kragsend": {
+        "id": "kragsend",
+        "name": "Kragsend",
+        "description": "A dwarven hold carved into the eastern flank of the Wyrmfang Peaks. Once a thriving clanhall of stonewrights and iron-smiths, its great bronze doors have been sealed for three months. No smoke rises from its chimneys. No traders emerge. The road to Kragsend is overgrown, and the last merchant caravan that tried to reach it turned back after hearing hammering from behind the sealed doors — rhythmic, ceaseless, wrong. Scouts sent from Duskfall haven't returned. The mountain around it seems... quieter than it should be."
+      },
+      "aethelmark_garrison": {
+        "id": "aethelmark_garrison",
+        "name": "Aethelmark Garrison",
+        "description": "A squat fort of pale stone and sharpened logs, situated northwest of Duskfall proper. Houses a company of fifty soldiers under Captain Aldric Vance. Drill yard, armory, stables, a command hall. The garrison's presence is officially for \"frontier protection,\" but the walls face both outward and inward — toward the town as much as the wilds. Supplies arrive weekly from the capital, but the wagons have been carrying more iron and less food lately. The soldiers are edgy; patrols have been doubled, though no one will say why."
+      },
+      "goblin_warrens": {
+        "id": "goblin_warrens",
+        "name": "The Goblin Warrens",
+        "description": "A labyrinth of tunnels beneath the scrublands east of Duskfall. Not a natural formation — dug and expanded over generations by goblin tribes. Narrow, dark, smelling of damp earth, mushroom rot, and unwashed bodies. The tunnels connect a network of caves that surface in unexpected places: under old barns, behind waterfalls, inside hollow hills. Recently, the scattered tribes have been consolidating. Strange orders are being passed down from someone — or something — that speaks in a tongue older than goblin-kind."
+      }
+    },
+    "items": {
+      "travellers_longbow": {
+        "id": "travellers_longbow",
+        "name": "Travel-Worn Longbow",
+        "description": "A six-foot bow of yew and horn, originally from an elven fletcher in the homeland. Well-maintained but shows signs of hard travel — a repaired string notch, faint weather stains. Reliable and familiar in the hands.",
+        "effects": {
+          "attack": 1
+        }
+      },
+      "hunting_knife": {
+        "id": "hunting_knife",
+        "name": "Hunting Knife",
+        "description": "A plain but sharp iron blade, worn at the edge from use. Good for skinning game, cutting rope, and in a pinch, drawing blood. The antler handle is wrapped in leather cord.",
+        "effects": {}
+      },
+      "travellers_pack": {
+        "id": "travellers_pack",
+        "name": "Traveler's Pack",
+        "description": "A worn leather backpack containing: a week's dried rations, a woolen bedroll, a tinderbox and flint, a waterskin, a coil of hempen rope, a small sewing kit, and a tin cup. Nothing fancy, everything functional.",
+        "effects": {}
+      },
+      "silver_leaf_pendant": {
+        "id": "silver_leaf_pendant",
+        "name": "Silver Leaf Pendant",
+        "description": "A small pendant of a single elm leaf, cast in tarnished silver. Given to Fox by his mother before he left. She said it was old — older than the elven homeland, older than the kingdom. She didn't say what it was for. The silver warms strangely against the skin when Fox is near certain kinds of stone.",
+        "effects": {}
+      },
+      "worn_journal": {
+        "id": "worn_journal",
+        "name": "Worn Journal",
+        "description": "A leather-bound journal, half-filled with Fox's observations on elven society — its rituals, its hypocrisies, its serene stagnation. The remaining blank pages are for the real world, the one he came looking for. A charcoal stub serves as pencil.",
+        "effects": {}
+      },
+      "leather_armor": {
+        "id": "leather_armor",
+        "name": "Studded Leather Armor",
+        "description": "Grey-brown leather reinforced with brass studs at the shoulders and chest. Supple from years of wear. A gift from the ranger who trained Fox — practical, unadorned, the armor of someone who expects to move quietly and live through the trouble anyway.",
+        "effects": {}
+      }
+    },
+    "characters": {
+      "marta_ironhill": {
+        "id": "marta_ironhill",
+        "name": "Marta Ironhill",
+        "description": "Half-elf, late forties, though she looks younger. Runs the Rusty Antler with quiet competence. She left her elven mother's house decades ago and never looked back — she understands Fox's restlessness without needing it explained. Sharp-eyed, warm-voiced, and careful. She notices things and decides when to share them. Her father was a human caravan master; she learned the trade on the road. Keeps a loaded crossbow under the bar and a network of informants across the frontier. She's been watching the darkness creep in longer than most.",
+        "location_id": "rusty_antler",
+        "stats": {
+          "hp": 12,
+          "ac": 12,
+          "hp_max": 12,
+          "strength": 10,
+          "dexterity": 12,
+          "constitution": 12,
+          "intelligence": 14,
+          "wisdom": 14,
+          "charisma": 14,
+          "mods": {}
+        }
+      },
+      "captain_alrdic": {
+        "id": "captain_alrdic",
+        "name": "Captain Aldric Vance",
+        "description": "Human, early thirties, crisp uniform, close-cropped beard. Commander of the Aethelmark Garrison. Charismatic and ambitious, the kind of man who smiles easily while calculating exactly how useful you are. He was sent to Duskfall as a posting — exile, really — after a political misstep at court. He intends to turn it into a springboard back up the ladder. He's received sealed orders from the capital that he keeps locked in his personal strongbox. Something about them excites him more than it should. He hosts \"town council\" meetings that are really just him talking.",
+        "location_id": "aethelmark_garrison",
+        "stats": {
+          "hp": 14,
+          "ac": 16,
+          "hp_max": 14,
+          "strength": 14,
+          "dexterity": 12,
+          "constitution": 14,
+          "intelligence": 16,
+          "wisdom": 10,
+          "charisma": 16,
+          "mods": {}
+        }
+      },
+      "rorik_deepdelve": {
+        "id": "rorik_deepdelve",
+        "name": "Rorik Deepdelve",
+        "description": "Dwarf, older than he looks (which is saying something — he looks ancient). Sole survivor of Kragsend, though he won't confirm that outright. He arrived in Duskfall a week ago, hollow-eyed and silent, with nothing but a miner's pick and a sealed satchel he never lets out of his sight. He drinks at the Rusty Antler from noon until closing, speaks only in monosyllables, and flinches at sudden loud noises. Marta brings him food without asking. He's waiting for something — or someone. At night, he mutters in Dwarvish. The word \"dhurzum\" (dragon) appears often.",
+        "location_id": "rusty_antler",
+        "stats": {
+          "hp": 16,
+          "ac": 15,
+          "hp_max": 16,
+          "strength": 16,
+          "dexterity": 10,
+          "constitution": 18,
+          "intelligence": 12,
+          "wisdom": 14,
+          "charisma": 8,
+          "mods": {}
+        }
+      },
+      "brother_orin": {
+        "id": "brother_orin",
+        "name": "Brother Orin",
+        "description": "Human, maybe sixty, stooped, with kind eyes and shaky hands. Keeper of the small shrine to the Traveler (a god of roads, strangers, and safe arrivals). His flock is small but devoted — mostly farmers and the superstitious. He's been having dreams. Vivid ones. A mountain with an open eye. A voice repeating a name he can't quite catch when he wakes. He thinks it's a saint or an omen. He's wrong, and he's starting to realize he's wrong. He's too afraid to tell anyone. Recently started keeping iron filings in his pockets.",
+        "location_id": "duskfall",
+        "stats": {
+          "hp": 8,
+          "ac": 10,
+          "hp_max": 8,
+          "strength": 8,
+          "dexterity": 10,
+          "constitution": 10,
+          "intelligence": 14,
+          "wisdom": 16,
+          "charisma": 14,
+          "mods": {}
+        }
+      },
+      "greta_harrow": {
+        "id": "greta_harrow",
+        "name": "Greta Harrow",
+        "description": "Human, forties, leathery skin, hands never clean. A farmer whose homestead lies at the eastern edge of Duskfall's territory, closest to the Wyrmfang foothills. Her husband died two years ago — fever, not violence, which she almost prefers. She's lost three sheep in the last month to \"goblins,\" but the kills were wrong. No theft, no meat taken. Just killed and left. She's been sleeping with an axe and has taken to leaving offerings at Brother Orin's shrine. She's the kind of practical woman who trusts her gut, and her gut is screaming.",
+        "location_id": "duskfall",
+        "stats": {
+          "hp": 10,
+          "ac": 11,
+          "hp_max": 10,
+          "strength": 14,
+          "dexterity": 10,
+          "constitution": 14,
+          "intelligence": 10,
+          "wisdom": 12,
+          "charisma": 12,
+          "mods": {}
+        }
+      },
+      "the_sallow_man": {
+        "id": "the_sallow_man",
+        "name": "The Sallow Man",
+        "description": "Appearance: tall, gaunt, pale-skinned, wearing a traveler's cloak of dusty grey that seems to swallow light. He has been seen in and around Duskfall for the past several weeks, always at the edges — entering town at dusk, leaving before dawn. He speaks rarely and in a whisper, but when he does, people listen. He carries no visible weapons, but something under his cloak moves when he walks. He seems to know everyone's name. He asks about the mountains. About old roads. About a specific peak the locals call the Dragon's Thumb. He pays in gold that smells of ash.",
+        "location_id": "duskfall",
+        "stats": {
+          "hp": 20,
+          "ac": 14,
+          "hp_max": 20,
+          "strength": 12,
+          "dexterity": 14,
+          "constitution": 16,
+          "intelligence": 18,
+          "wisdom": 16,
+          "charisma": 18,
+          "mods": {}
+        }
+      },
+      "kaz_rughunter": {
+        "id": "kaz_rughunter",
+        "name": "Kaz of the Ruined Hand",
+        "description": "Goblin, young by goblin standards, with a scarred face and one ear missing. Currently chained in the Garrison's holding cell, captured three days ago during a raid that wasn't. He surrendered, which made the soldiers suspicious. He speaks passable Common and has been asking to speak to \"someone who listens.\" The soldiers think he's a spy. He might be. But he's also terrified of something in the warrens — something that took over the chieftains and speaks in a language that burns the ears of those who hear it. He escaped. He's looking for allies, even elf-ones.",
+        "location_id": "aethelmark_garrison",
+        "stats": {
+          "hp": 9,
+          "ac": 13,
+          "hp_max": 9,
+          "strength": 8,
+          "dexterity": 16,
+          "constitution": 12,
+          "intelligence": 14,
+          "wisdom": 12,
+          "charisma": 10,
+          "mods": {}
+        }
+      }
+    },
+    "events": {
+      "kragsend_silence": {
+        "id": "kragsend_silence",
+        "t": 0,
+        "narrative_time": "Three months ago",
+        "location_id": "kragsend",
+        "participants": [],
+        "description": "Kragsend's great bronze doors groaned shut for the last time. Inside, Clan Deepdelve had struck a vein of black ore veined with iridescent crimson — dragon-touched mineral from the deep earth. The clan elder, Thrain Ironbrow, declared it a gift from the mountain. Within a week, the dreams began. Within a month, the forges ran day and night. No traders were received. No messengers left. The last sound heard from outside was the rhythmic hammering of metal on stone — and a low, resonant hum that vibrated through the mountain itself.",
+        "thread_id": "lost_hold_of_kragsend"
+      },
+      "goblin_unification": {
+        "id": "goblin_unification",
+        "t": 1,
+        "narrative_time": "Two months ago",
+        "location_id": "goblin_warrens",
+        "participants": [],
+        "description": "The Ashen Voice emerged among the goblin tribes. A chieftain of the Ruined Hand tribe found a black shard in the hills — smooth, warm, humming — and pressed it to his chest. It embedded itself in bone and began to speak. The voice came in dreams first, then in waking whispers, then through the chieftain's mouth in a language that made other goblins' ears bleed. Within a fortnight, three tribes had sworn allegiance. Those who refused were fed to the warrens' deep places. The Ashen Voice began calling for stone. For iron. For a place where the sky could be brought down.",
+        "thread_id": "goblins_united"
+      },
+      "light_in_the_peaks": {
+        "id": "light_in_the_peaks",
+        "t": 2,
+        "narrative_time": "One month ago",
+        "location_id": "wyrmfang_peaks",
+        "participants": [],
+        "description": "On the night of the new moon, a column of pale green light shot up from the Dragon's Thumb peak, visible as far as Duskfall. It lingered for seventeen heartbeats, then vanished. Those who saw it described the light as \"cold\" and \"hungry.\" Brother Orin dreamed that night of a mountain with an open eye. Captain Vance logged an \"atmospheric anomaly\" and sent a patrol to investigate — they returned three days later with no memory of where they'd been and a shared, unshakable terror of the dark. The Sallow Man, watching from the edge of town, smiled for the first time in weeks.",
+        "thread_id": "the_dragons_thumb"
+      },
+      "rorik_arrives": {
+        "id": "rorik_arrives",
+        "t": 3,
+        "narrative_time": "One week ago",
+        "location_id": "duskfall",
+        "participants": [
+          "rorik_deepdelve"
+        ],
+        "description": "Rorik Deepdelve stumbled into Duskfall at dusk, half-dead, his beard matted with blood not his own. He had walked for three days through the foothills without stopping. He carried nothing but a miner's pick and a sealed oilcloth satchel chained to his wrist. He refused to speak to Captain Vance's soldiers. He found the Rusty Antler, ordered a drink, and has not stopped drinking since. Marta Ironhill took one look at his eyes and did not press him for answers. At night, when he thinks no one is listening, he speaks to someone who isn't there in Dwarvish: \"I'm sorry. I'm sorry. I couldn't stop them.\"",
+        "thread_id": "lost_hold_of_kragsend"
+      },
+      "kaz_surrenders": {
+        "id": "kaz_surrenders",
+        "t": 4,
+        "narrative_time": "Three days ago",
+        "location_id": "aethelmark_garrison",
+        "participants": [
+          "kaz_rughunter",
+          "captain_alrdic"
+        ],
+        "description": "Kaz of the Ruined Hand walked out of the scrublands at noon with his hands raised, surrendered to the first patrol he met, and asked to speak to \"someone who listens, not someone who gives orders.\" Captain Vance interrogated him personally and reported the goblin \"raving about a voice in the ground and a ceremony when the moon is full.\" He dismissed Kaz as a deserter from a rival tribe trying to buy protection. But he ordered Kaz chained in the holding cells rather than executed — a small mercy that suggests Vance is not entirely sure Kaz is lying.",
+        "thread_id": "goblins_united"
+      },
+      "sealed_orders_arrive": {
+        "id": "sealed_orders_arrive",
+        "t": 5,
+        "narrative_time": "Three days ago",
+        "location_id": "aethelmark_garrison",
+        "participants": [
+          "captain_alrdic"
+        ],
+        "description": "A rider from the Aethelmark capital arrived at the Garrison with a dispatch case sealed in royal wax. Captain Vance read the contents alone in his quarters, then burned the letter. He emerged pale and restless. He ordered the garrison's supply of blasting powder doubled. He sent a message to the capital requesting \"specialized excavation equipment.\" He has not slept more than a few hours since. The letter contained instructions for securing the Dragon's Thumb crypt and a warning that \"other parties\" — unnamed — would attempt to reach it first.",
+        "thread_id": "the_dragons_thumb"
+      }
+    },
+    "threads": {
+      "shadow_over_duskfall": {
+        "id": "shadow_over_duskfall",
+        "name": "The Shadow Over Duskfall",
+        "parent_id": null,
+        "description": "ROOT THREAD. Three months ago, Kragsend went silent. Two months ago, goblin raids began organizing — too coordinated, too strategic. One month ago, a light was seen in the Wyrmfang Peaks, and a dwarf arrived in Duskfall with a satchel he won't open. Three days ago, a goblin surrendered to the garrison, begging to speak. The Sallow Man has been asking about the Dragon's Thumb. Brother Orin dreams of a mountain with an open eye. Something in the peaks is waking — and it has found voices among goblins, a corrupted dwarven clan, and human agents who think they can control it. CLOCK: The next full moon, seven nights from now. A ritual will be attempted in the high caves. If it succeeds, an ancient dragon will be bound to a mortal will — or will break free and burn the frontier."
+      },
+      "lost_hold_of_kragsend": {
+        "id": "lost_hold_of_kragsend",
+        "name": "The Lost Hold of Kragsend",
+        "parent_id": "shadow_over_duskfall",
+        "description": "SUBTHREAD. Kragsend's bronze doors are sealed. The dwarves inside are not dead — they are changed. A vein of dragon-tainted ore was struck deep in the mines, and it whispered to them. The clan elder, Thrain Ironbrow, made a pact with something slumbering beneath the mountain. Now the dwarves work ceaselessly, shaping that ore into things that should not exist: chains, mirrors, a crown. Rorik Deepdelve is the only one who refused. He carries the clan's sealed records in his satchel, including a map to the heart of the mountain and a warning carved in a script older than the dwarves themselves."
+      },
+      "goblins_united": {
+        "id": "goblins_united",
+        "name": "Goblins United",
+        "parent_id": "shadow_over_duskfall",
+        "description": "SUBTHREAD. The scattered goblin tribes of the frontier have been consolidated under a single leader — a chieftain called the Ashen Voice, who speaks with a borrowed tongue. The voice comes from a black shard embedded in the chieftain's chest, a fragment of the same dragon-tainted ore found at Kragsend. It grants power and obedience, but it is consuming the host from the inside. The goblins are building something in the deepest warrens: a circle of standing stones, a place to call the sky down. Kaz of the Ruined Hand fled rather than be made into the next vessel."
+      },
+      "the_dragons_thumb": {
+        "id": "the_dragons_thumb",
+        "name": "The Dragon's Thumb",
+        "parent_id": "shadow_over_duskfall",
+        "description": "SUBTHREAD. The highest peak in the Wyrmfang range, visible from Duskfall on a clear day. Named for its crooked shape. Beneath it, a sealed crypt holds the bones of an ancient dragon — not dead, but dreaming, waiting for the right voice to wake it. The Aethelmark crown knows of the crypt. Captain Vance's sealed orders relate to it. The Sallow Man serves a faction within Aethelmark's court that wants to claim the dragon's power. The truth: the dragon has been whispering to all of them — dwarves, goblins, humans — playing each faction against the others to break its prison."
+      }
+    },
+    "player": {
+      "location_id": "duskfall",
+      "stats": {
+        "hp": 11,
+        "ac": 14,
+        "hp_max": 11,
+        "strength": 10,
+        "dexterity": 16,
+        "constitution": 12,
+        "intelligence": 17,
+        "wisdom": 10,
+        "charisma": 9,
+        "mods": {
+          "perception": 0
+        }
+      },
+      "items": [
+        "hunting_knife",
+        "silver_leaf_pendant",
+        "travellers_longbow",
+        "travellers_pack",
+        "worn_journal",
+        "leather_armor"
+      ],
+      "log": [
+        "The ranger who trained me — old Kaelen — said I had good hands but a distracted mind. \"You're always looking past the deer at something you can't shoot,\" he said. He wasn't wrong. But I can track, I can shoot, and I can make fire without swearing at it. The rest I'll learn as I go. That's the point.",
+        "Humans fascinate and unsettle me in equal measure. They live so fast, build so quickly, break things so casually. The history books in the homeland treat them like a natural disaster — inevitable, destructive, soon passed. But I've been reading human political treatises on the road, and there's something there. A messiness that feels alive. I want to understand it. I want to write it down before it changes again.",
+        "Mother's pendant is warm today. It does that sometimes. She said it was a family heirloom, older than the elven courts. I never pressed for more — she had that look she gets when she's decided not to answer. I don't know what it is, but I know it matters. I can feel it pressing against my chest like a second heartbeat.",
+        "The homeland felt like amber — beautiful, yes, but nothing moves. The elders speak in circles, the trees grow in the same places they've grown for millennia, and every argument I ever had ended with \"you'll understand when you're older\" as if age is an answer to anything. So I left. Arthur Feeney died with that place; Fox is the name I picked on the road. I'm supposed to be heading toward the frontier — where humans live, where things actually happen. I've heard Duskfall is a good place to start. Small enough to get a sense of things, big enough to have a tavern worth sleeping in."
+      ]
+    },
+    "turn": 1,
+    "next_event_t": 6
+  },
+  "prior_prose": [
+    "---\n\nThe cart lurches to a halt, and you open your eyes.\n\nThe driver — a human farmer with a face like beaten leather — jerks his chin toward the timber wall ahead. \"Duskfall. End of the line, elf.\"\n\nYou climb down, pack slung over one shoulder, bow case across your back. The afternoon sun is low, painting everything in long amber shadows. The town sprawls before you: a cluster of wooden buildings huddled behind a palisade that looks recently patched. Smoke rises from a dozen chimneys. The air smells of pine, woodsmoke, wet earth, and something else — something metallic, like old iron left out in the rain.\n\nThe road from the west has been quiet. Three days of walking through farmland that grew thinner and more nervous as you went. Farmers with axes in their hands instead of tools. Empty livestock pens. A burned barn you passed yesterday, still smoldering, with no one left to put it out.\n\nThe gate is unguarded, but a soldier in Aethelmark grey watches you from the watch-post, arms crossed, eyes tracking your bow.\n\nPast the gate, Duskfall opens up. A main street of packed earth leads to a town square. To your left, a two-story building with a chipped antler sign creaks in the breeze — **The Rusty Antler**, warm light bleeding from its windows. Ahead, a small stone shrine with a weathered Traveler's symbol. Beyond that, the **Aethelmark Garrison** squats on a low rise, its walls bristling with sharpened logs.\n\nPeople move with purpose. A woman in farming clothes hurries past, not meeting your eyes. A dwarf sits slumped on a bench outside the tavern, staring at nothing. A lean man in a dusty grey cloak watches from the shadow of a stable — and when you glance his way, he's already gone, melted into the alley.\n\nYour hand drifts to your pendant. It's warm again.\n\nFrom the tavern, you hear the low murmur of voices — and a sharp laugh that doesn't sound happy.\n\n---\n\n**What do you do?**\n\n- Head into **The Rusty Antler** to get a room, some food, and news?\n- Explore the **town proper** — the shrine, the market square, the people?\n- Make for the **Garrison** — a young elf with a bow arriving at a frontier fort might be worth reporting to the authorities?\n- Something else entirely?",
+    "The Rusty Antler's door groans on its leather hinges as you push it open, and warmth rushes out to meet you — woodsmoke, roasting meat, spilled ale, the sweat of a dozen tired bodies. It smells like life, and after three days on the road, you let yourself breathe.\n\nThe common room is busy but not crowded. A group of garrison soldiers huddle around a corner table, speaking low and laughing without mirth. A pair of farmers sit in silence by the fire, nursing mugs. Near the bar, slumped over his drink like a monument to regret, sits the dwarf you saw outside — **Rorik Deepdelve**, his beard stained with ale, his eyes fixed on nothing in particular. A worn oilcloth satchel is chained to his wrist, resting on the bar beside his empty plate.\n\nBehind the bar, a half-elf woman with sharp grey eyes and a calm, knowing face wipes a glass with a rag. **Marta Ironhill**. She glances up as you enter, sizes you up in a single practiced motion — bow, pack, the way you carry yourself — and offers a small, genuine smile.\n\n\"New face,\" she says. \"That's either a traveler or a problem. Which are you?\"\n\nShe gestures to an empty stool at the bar. \"Sit. First one's half price if you tell me where you're coming from and whether you're planning to stay long.\"\n\nThe room seems to exhale. You're no longer the center of attention — just another arrival in a frontier town that's seen too many strange things lately. The soldiers go back to their murmured conversation. The dwarf doesn't move.\n\nYour pendant hums faintly against your chest, warm as ever.\n\n**What do you do?**"
+  ]
+}

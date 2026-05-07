@@ -18,28 +18,26 @@ def _empty_world() -> WorldModel:
 
 def test_round_trip_preserves_session(tmp_path: Path):
     world = _empty_world()
-    prose = seed_inn_scene(world)
-    boundaries = [0, 3, 7]
+    opening = seed_inn_scene(world)
+    prose = [opening, "You step inside.", "The barkeep nods."]
     path = tmp_path / "save.json"
 
-    save_session(path, world=world, prior_prose=prose, scene_boundaries=boundaries)
+    save_session(path, world=world, prior_prose=prose)
     snap = load_session(path)
 
     assert snap.world.model_dump() == world.model_dump()
     assert snap.prior_prose == prose
-    assert snap.scene_boundaries == boundaries
 
 
 def test_round_trip_empty_session(tmp_path: Path):
     world = _empty_world()
     path = tmp_path / "save.json"
 
-    save_session(path, world=world, prior_prose="", scene_boundaries=[])
+    save_session(path, world=world, prior_prose=[])
     snap = load_session(path)
 
     assert snap.world.model_dump() == world.model_dump()
-    assert snap.prior_prose == ""
-    assert snap.scene_boundaries == []
+    assert snap.prior_prose == []
 
 
 def test_save_overwrites_existing_file(tmp_path: Path):
@@ -47,10 +45,10 @@ def test_save_overwrites_existing_file(tmp_path: Path):
     path = tmp_path / "save.json"
     path.write_text("garbage that should be replaced", encoding="utf-8")
 
-    save_session(path, world=world, prior_prose="hello", scene_boundaries=[1])
+    save_session(path, world=world, prior_prose=["hello"])
     snap = load_session(path)
 
-    assert snap.prior_prose == "hello"
+    assert snap.prior_prose == ["hello"]
 
 
 def test_load_missing_file_raises(tmp_path: Path):
@@ -70,11 +68,10 @@ def test_save_writes_human_readable_json(tmp_path: Path):
     world = _empty_world()
     path = tmp_path / "save.json"
 
-    save_session(path, world=world, prior_prose="hi", scene_boundaries=[2])
+    save_session(path, world=world, prior_prose=["hi"])
     text = path.read_text(encoding="utf-8")
 
     # indented JSON contains newlines and the top-level keys
     assert "\n" in text
     assert '"prior_prose"' in text
-    assert '"scene_boundaries"' in text
     assert '"world"' in text

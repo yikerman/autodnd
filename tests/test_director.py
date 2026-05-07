@@ -58,8 +58,8 @@ def test_director_runs_tool_then_returns_prose():
             return ModelResponse(
                 parts=[
                     ToolCallPart(
-                        tool_name="append_player_log",
-                        args={"text": "You arrived at the inn."},
+                        tool_name="move_player",
+                        args={"location_id": "inn"},
                         tool_call_id="call_1",
                     )
                 ]
@@ -71,7 +71,7 @@ def test_director_runs_tool_then_returns_prose():
     result = agent.run_sync("test", deps=deps)
 
     assert result.output == "You see the inn."
-    assert world.player.log == ["You arrived at the inn."]
+    assert world.player.location_id == "inn"
 
 
 def test_director_receives_validation_error_inline():
@@ -112,31 +112,6 @@ def test_director_receives_validation_error_inline():
     assert any("error" in r and "phantom" in r for r in seen_returns), seen_returns
 
 
-def test_director_mark_end_scene_records_turn():
-    """`mark_end_scene` appends current world.turn to the caller's list."""
-    world = _seeded_world()
-    world.turn = 7
-    boundaries: list[int] = []
-
-    step = {"n": 0}
-
-    def model_fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        step["n"] += 1
-        if step["n"] == 1:
-            return ModelResponse(
-                parts=[
-                    ToolCallPart(tool_name="mark_end_scene", args={}, tool_call_id="c1")
-                ]
-            )
-        return ModelResponse(parts=[TextPart("end.")])
-
-    agent = build_director(model=FunctionModel(model_fn))
-    deps = DirectorDeps(world=world, rng=random.Random(42), scene_boundaries=boundaries)
-    agent.run_sync("test", deps=deps)
-
-    assert boundaries == [7]
-
-
 def test_run_director_keeps_only_final_prose_block():
     """The Director is prompted to emit prose once, at the end. If the model
     drafts a complete narrative early and then writes another after more tool
@@ -153,8 +128,8 @@ def test_run_director_keeps_only_final_prose_block():
                 parts=[
                     TextPart("Draft block. **What do you do?**"),
                     ToolCallPart(
-                        tool_name="append_player_log",
-                        args={"text": "Hadrian gave directions."},
+                        tool_name="move_player",
+                        args={"location_id": "inn"},
                         tool_call_id="call_1",
                     ),
                 ]
@@ -173,15 +148,20 @@ def test_run_director_keeps_only_final_prose_block():
 
 def test_turn_user_message_includes_world_render_and_input():
     world = _seeded_world()
-    msg = turn_user_message(world, "I look around.", "You stand at the door.")
+    msg = turn_user_message(
+        world,
+        "I look around.",
+        ["You stand at the door.", "The door creaks open."],
+    )
     assert "# World (turn 0)" in msg  # render_omniscient header
     assert "I look around." in msg
     assert "You stand at the door." in msg
-    assert "## Prior turn's prose" in msg
+    assert "The door creaks open." in msg
+    assert "## Prior prose (oldest first)" in msg
     assert "## Player input" in msg
 
 
 def test_turn_user_message_handles_empty_prior_prose():
     world = _seeded_world()
-    msg = turn_user_message(world, "go.", "")
+    msg = turn_user_message(world, "go.", [])
     assert "(none — this is the first turn after the opening.)" in msg

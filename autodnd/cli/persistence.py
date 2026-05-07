@@ -1,6 +1,6 @@
-"""JSON snapshot of a REPL session: world + last prose + scene boundaries.
+"""JSON snapshot of a REPL session: world + accumulated prose.
 
-The triple matches what ``cli.main`` carries in locals between turns; restoring
+The pair matches what ``cli.main`` carries in locals between turns; restoring
 it lets ``--load`` resume mid-session without re-bootstrapping the Director.
 """
 
@@ -15,20 +15,16 @@ from autodnd.engine.world import WorldModel
 
 class SessionSnapshot(BaseModel):
     world: WorldModel
-    prior_prose: str
-    scene_boundaries: list[int]
+    prior_prose: list[str]
 
 
 def save_session(
     path: Path,
     *,
     world: WorldModel,
-    prior_prose: str,
-    scene_boundaries: list[int],
+    prior_prose: list[str],
 ) -> None:
-    snap = SessionSnapshot(
-        world=world, prior_prose=prior_prose, scene_boundaries=scene_boundaries
-    )
+    snap = SessionSnapshot(world=world, prior_prose=prior_prose)
     path.write_text(snap.model_dump_json(indent=2), encoding="utf-8")
 
 

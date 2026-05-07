@@ -3,13 +3,13 @@
 Bootstrap (``world.turn == -1``) is handled by a separate ``Bootstrapper``
 agent (see :mod:`autodnd.llm.bootstrapper`). The Director takes over once
 ``begin_play`` flips ``world.turn`` to ``0``. Tools cover dice
-(roll/check/attack/save) and canon mutations (create/mint/move/update/append/
-end-scene). Final output is prose for the player.
+(roll/check/attack/save) and canon mutations (create/mint/move/update). Final
+output is prose for the player.
 """
 
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import ModelResponse, TextPart
@@ -18,7 +18,6 @@ from pydantic_ai.models import Model
 from autodnd.engine.delta import (
     ValidationError,
     apply_add_player_item,
-    apply_append_player_log,
     apply_create_character,
     apply_create_item,
     apply_create_location,
@@ -50,7 +49,6 @@ from autodnd.llm.tracing import log_agent_call
 class DirectorDeps:
     world: WorldModel
     rng: random.Random
-    scene_boundaries: list[int] = field(default_factory=list)
 
 
 def _ok_or_err(err: ValidationError | None) -> str:
@@ -266,30 +264,23 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         Use whenever prose implies the player gave it away, dropped, or lost it."""
         return _ok_or_err(apply_remove_player_item(ctx.deps.world, item_id=item_id))
 
-    @agent.tool
-    def append_player_log(ctx: RunContext[DirectorDeps], text: str) -> str:
-        """Append a log entry capturing what the player perceived (or
-        misinterpreted, or assumed) this turn, written in their voice."""
-        return _ok_or_err(apply_append_player_log(ctx.deps.world, text=text))
-
-    @agent.tool
-    def mark_end_scene(ctx: RunContext[DirectorDeps]) -> str:
-        """Mark this turn as a scene boundary so the engine can group events by
-        scene. Call when the current scene closes."""
-        ctx.deps.scene_boundaries.append(ctx.deps.world.turn)
-        return "ok"
-
     return agent
 
 
 # ---------- User-message templates ----------
 
 
-def turn_user_message(world: WorldModel, player_input: str, prior_prose: str) -> str:
+def turn_user_message(
+    world: WorldModel, player_input: str, prior_prose: list[str]
+) -> str:
+    if prior_prose:
+        prose_section = "\n\n---\n\n".join(prior_prose)
+    else:
+        prose_section = "(none — this is the first turn after the opening.)"
     return (
         f"{render_omniscient(world)}\n\n"
-        "## Prior turn's prose\n\n"
-        f"{prior_prose or '(none — this is the first turn after the opening.)'}\n\n"
+        "## Prior prose (oldest first)\n\n"
+        f"{prose_section}\n\n"
         "## Player input\n\n"
         f"{player_input}"
     )
@@ -304,14 +295,10 @@ def run_director(
     rng: random.Random,
     *,
     model: Model | None = None,
-    scene_boundaries: list[int] | None = None,
 ) -> str:
-    """Run one Director turn. Returns prose. ``scene_boundaries`` is a
-    caller-owned list that ``mark_end_scene`` appends to (mutated in place)."""
-    if scene_boundaries is None:
-        scene_boundaries = []
+    """Run one Director turn. Returns prose."""
     agent = build_director(model)
-    deps = DirectorDeps(world=world, rng=rng, scene_boundaries=scene_boundaries)
+    deps = DirectorDeps(world=world, rng=rng)
     start = time.monotonic()
     result = agent.run_sync(user_message, deps=deps)
     log_agent_call(
