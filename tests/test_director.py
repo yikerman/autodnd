@@ -7,7 +7,6 @@ playtest, not here.
 
 import random
 
-import pytest
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -25,7 +24,6 @@ from autodnd.engine.delta import (
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
 from autodnd.llm.director import (
     DirectorDeps,
-    bootstrap_user_message,
     build_director,
     run_director,
     turn_user_message,
@@ -171,13 +169,6 @@ def test_run_director_keeps_only_final_prose_block():
     )
 
     assert output == "Final block. **What do you do?**"
-
-
-def test_bootstrap_user_message_is_not_implemented():
-    """Bootstrap is being reworked into an interactive flow; the old static
-    trigger is gated until that lands."""
-    with pytest.raises(NotImplementedError):
-        bootstrap_user_message()
 
 
 def test_turn_user_message_includes_world_render_and_input():

@@ -1,8 +1,10 @@
-"""Director agent: omniscient narrative LLM.
+"""Director agent: omniscient narrative LLM for per-turn play.
 
-One agent for both bootstrap (``world.turn == -1``) and per-turn play. Tools
-cover dice (roll/check/attack/save) and canon mutations (create/mint/move/
-update/append/end-scene). Final output is prose for the player.
+Bootstrap (``world.turn == -1``) is handled by a separate ``Bootstrapper``
+agent (see :mod:`autodnd.llm.bootstrapper`). The Director takes over once
+``begin_play`` flips ``world.turn`` to ``0``. Tools cover dice
+(roll/check/attack/save) and canon mutations (create/mint/move/update/append/
+end-scene). Final output is prose for the player.
 """
 
 import random
@@ -281,13 +283,6 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
 
 
 # ---------- User-message templates ----------
-
-
-def bootstrap_user_message() -> str:
-    raise NotImplementedError(
-        "Bootstrap is being reworked into an interactive character / world-"
-        "building dialogue. For now, start sessions with `--demo-scene`."
-    )
 
 
 def turn_user_message(world: WorldModel, player_input: str, prior_prose: str) -> str:

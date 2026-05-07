@@ -14,16 +14,14 @@ from pathlib import Path
 
 from blessed import Terminal
 from dotenv import load_dotenv
+from pydantic_ai.messages import ModelMessage
 
 from autodnd.cli.persistence import load_session, save_session
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
 from autodnd.fixtures import seed_inn_scene
 from autodnd.llm import tracing
-from autodnd.llm.director import (
-    bootstrap_user_message,
-    run_director,
-    turn_user_message,
-)
+from autodnd.llm.bootstrapper import bootstrap_user_message, run_bootstrapper
+from autodnd.llm.director import run_director, turn_user_message
 from autodnd.llm.sidebar import run_sidebar
 
 T = Terminal()
@@ -34,7 +32,7 @@ AutoDND — solo one-shot DM. Type your action, or:
   /log       — show recent events
   /inv       — show inventory
   /ask Q     — free-form sidebar question
-  /save FILE — dump session to FILE and exit (resume with --load FILE)
+  /save FILE — snapshot session to FILE (resume later with --load FILE)
   /help      — this banner
   /quit      — exit
 """
@@ -56,23 +54,35 @@ def _empty_world() -> WorldModel:
     )
 
 
-def initialize_session(
-    *, demo_scene: bool, rng: random.Random
-) -> tuple[WorldModel, str, list[int]]:
-    """Returns (seeded world, opening prose, scene_boundaries)."""
+def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str, list[int]]:
+    """Returns (seeded world, opening prose, scene_boundaries).
+
+    Demo path uses the hardcoded fixture. LLM path runs the Bootstrapper in a
+    Q&A loop until it calls ``begin_play`` (which flips ``world.turn`` to 0);
+    the prose from that final turn is the opening narration.
+    """
     world = _empty_world()
     scene_boundaries: list[int] = []
     if demo_scene:
-        opening_prose = seed_inn_scene(world)
-    else:
-        opening_prose = run_director(
-            world,
-            bootstrap_user_message(),
-            rng,
-            scene_boundaries=scene_boundaries,
+        return world, seed_inn_scene(world), scene_boundaries
+
+    history: list[ModelMessage] = []
+    user_msg = bootstrap_user_message()
+    while True:
+        prose, history = run_bootstrapper(
+            world, user_msg, message_history=history
         )
-        world.turn = 0
-    return world, opening_prose, scene_boundaries
+        _print_block(prose, kind="prose")
+        if world.turn == 0:
+            return world, prose, scene_boundaries
+        line = _read_input()
+        if line is None:
+            raise SystemExit(0)
+        if line in ("/quit", "/exit"):
+            raise SystemExit(0)
+        # Bootstrap doesn't route slash commands — Sidebar has no canon to
+        # read yet, and /save mid-bootstrap is out of scope.
+        user_msg = line
 
 
 def run_turn(
@@ -170,7 +180,7 @@ def _read_input() -> str | None:
     """Prompt the user. Returns None on EOF / Ctrl-C."""
     try:
         line = input(_PROMPT)
-    except EOFError, KeyboardInterrupt:
+    except (EOFError, KeyboardInterrupt):
         sys.stdout.write(str(T.normal))
         sys.stdout.flush()
         print()
@@ -203,10 +213,13 @@ def main() -> None:
     else:
         print(T.bright_black("Initializing world…"), file=sys.stderr)
         world, opening_prose, scene_boundaries = initialize_session(
-            demo_scene=args.demo_scene, rng=rng
+            demo_scene=args.demo_scene
         )
         prior_prose = opening_prose
-        _print_block(opening_prose, kind="prose")
+        # Demo path prints opening here. LLM path's bootstrapper loop already
+        # printed each turn (including the opening), so suppress duplicate.
+        if args.demo_scene:
+            _print_block(opening_prose, kind="prose")
 
     while True:
         line = _read_input()
@@ -233,10 +246,10 @@ def main() -> None:
                     _print_block(f"Save failed: {e}", kind="error")
                     continue
                 _print_block(
-                    f"Saved to {path}. Resume with: autodnd --load {path}",
+                    f"Saved to {path}. Resume later with: autodnd --load {path}",
                     kind="status",
                 )
-                return
+                continue
             if line.startswith("/"):
                 output = handle_slash(line, world)
                 kind = "banner" if line == "/help" else "sidebar"
