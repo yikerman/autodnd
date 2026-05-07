@@ -1,7 +1,7 @@
 """Resolution — the structured result of a deterministic rules call.
 
 Every dice/check/attack/save returns a :class:`Resolution`. The Director
-reads it and authors beats and a `WorldDelta` consistent with it; the
+reads it and writes prose + canon mutations consistent with it; the
 Director cannot author a success it didn't roll.
 """
 

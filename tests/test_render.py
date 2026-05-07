@@ -1,25 +1,25 @@
 """Smoke tests for engine.render.render_omniscient.
 
-The output format is iterative; these tests pin down structural invariants
-the Director's prompt depends on (sections present, names resolved instead of
-raw ids, deterministic ordering, knowledge timeline rendered).
+Pin down structural invariants the Director's prompt depends on (sections
+present, names resolved instead of raw ids, deterministic ordering, player
+log timeline rendered).
 """
 
 from autodnd.engine.delta import (
-    BootstrapDirective,
-    EntitiesToCreate,
-    apply_bootstrap,
+    apply_add_player_item,
+    apply_append_player_log,
+    apply_create_character,
+    apply_create_item,
+    apply_create_location,
+    apply_create_thread,
+    apply_mint_event,
+    apply_move_player,
+    apply_update_player_stats,
 )
 from autodnd.engine.render import render_omniscient
 from autodnd.engine.world import (
-    Character,
     CharacterStats,
-    Event,
-    Item,
-    KnowledgeEntry,
-    Location,
     PlayerState,
-    Thread,
     WorldModel,
 )
 
@@ -33,72 +33,61 @@ def _empty_world() -> WorldModel:
 
 def _bootstrapped_world() -> WorldModel:
     world = _empty_world()
-    directive = BootstrapDirective(
-        entities=EntitiesToCreate(
-            locations=[
-                Location(
-                    id="inn",
-                    name="Crow's Foot Inn",
-                    description="Roadside inn at dusk.",
-                ),
-                Location(id="cap", name="Vellor capital", description="Walled city."),
-            ],
-            characters=[
-                Character(
-                    id="hadrian",
-                    name="Hadrian",
-                    description="Innkeeper.",
-                    location_id="inn",
-                    stats=CharacterStats(hp=14, ac=11),
-                ),
-            ],
-            items=[Item(id="sword", name="shortsword", description="Plain blade.")],
-        ),
-        threads=[
-            Thread(id="root", name="root arc", description="Setting tension."),
-            Thread(
-                id="inn_night",
-                parent_id="root",
-                name="Night at the inn",
-                description="Mara stops over.",
-            ),
-        ],
-        backstory_events=[
-            Event(
-                id="e0",
-                t=0,
-                narrative_time="year 1043",
-                location_id="cap",
-                participants=[],
-                description="Treaty signed.",
-                thread_id="root",
-            ),
-            Event(
-                id="e1",
-                t=1,
-                narrative_time="today, dusk",
-                location_id="inn",
-                participants=["hadrian"],
-                description="Mara arrived at the inn.",
-                thread_id="inn_night",
-            ),
-        ],
-        initial_knowledge=[
-            KnowledgeEntry(
-                event_id="e1", text="You reached the inn at dusk.", learned_at=-1
-            ),
-            KnowledgeEntry(
-                event_id=None, text="You assume the kingdom is at peace.", learned_at=-1
-            ),
-        ],
-        initial_player_state=PlayerState(
-            location_id="inn",
-            stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2}),
-            items=["sword"],
-        ),
-        opening_beats=[],
+    apply_create_location(
+        world, id="inn", name="Crow's Foot Inn", description="Roadside inn at dusk."
     )
-    assert apply_bootstrap(world, directive) == []
+    apply_create_location(
+        world, id="cap", name="Vellor capital", description="Walled city."
+    )
+    apply_create_thread(
+        world,
+        id="root",
+        name="root arc",
+        parent_id=None,
+        description="Setting tension.",
+    )
+    apply_create_thread(
+        world,
+        id="inn_night",
+        name="Night at the inn",
+        parent_id="root",
+        description="Mara stops over.",
+    )
+    apply_create_character(
+        world,
+        id="hadrian",
+        name="Hadrian",
+        description="Innkeeper.",
+        location_id="inn",
+        stats=CharacterStats(hp=14, ac=11),
+    )
+    apply_create_item(world, id="sword", name="shortsword", description="Plain blade.")
+    apply_mint_event(
+        world,
+        id="e0",
+        narrative_time="year 1043",
+        location_id="cap",
+        participants=[],
+        description="Treaty signed.",
+        thread_id="root",
+    )
+    apply_mint_event(
+        world,
+        id="e1",
+        narrative_time="today, dusk",
+        location_id="inn",
+        participants=["hadrian"],
+        description="Mara arrived at the inn.",
+        thread_id="inn_night",
+    )
+    apply_move_player(world, location_id="inn")
+    apply_update_player_stats(
+        world, stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2})
+    )
+    apply_add_player_item(world, item_id="sword")
+    apply_append_player_log(world, text="You reached the inn at dusk.")
+    apply_append_player_log(world, text="You assume the kingdom is at peace.")
+    world.turn = 0
     return world
 
 
@@ -115,37 +104,29 @@ def test_render_includes_top_level_sections():
         assert header in out, f"missing section: {header!r}"
 
 
-def test_render_announces_next_t():
-    out = render_omniscient(_bootstrapped_world())
-    # max event.t == 1, so next must be ≥ 2
-    assert "Next `Event.t` must be ≥ 2" in out
-
-
 def test_render_resolves_names_not_just_ids():
     out = render_omniscient(_bootstrapped_world())
     assert "Hadrian" in out
     assert "Crow's Foot Inn" in out
     assert "Vellor capital" in out
-    # Participants on e1 should resolve to "Hadrian" (name) inline with the event line
     assert "(with Hadrian)" in out
 
 
 def test_render_thread_nesting_is_depth_first():
     out = render_omniscient(_bootstrapped_world())
-    # root thread renders before its child
     root_idx = out.index("`root` — root arc")
     child_idx = out.index("`inn_night` — Night at the inn")
     assert root_idx < child_idx
-    # child uses a deeper heading level
     assert "#### `inn_night`" in out
     assert "### `root`" in out
 
 
-def test_render_knowledge_timeline_includes_assumption_marker():
+def test_render_player_log_appears_in_order():
     out = render_omniscient(_bootstrapped_world())
-    assert "[event:`e1`]" in out
-    assert "[assumption]" in out
-    assert "You reached the inn at dusk." in out
+    assert "Player log" in out
+    inn_idx = out.index("You reached the inn at dusk.")
+    assume_idx = out.index("You assume the kingdom is at peace.")
+    assert inn_idx < assume_idx
 
 
 def test_render_player_section_shows_stats_and_items():
@@ -159,7 +140,7 @@ def test_render_empty_world():
     out = render_omniscient(_empty_world())
     assert "# World (turn -1)" in out
     assert "(no threads)" in out
-    assert "(none)" in out  # locations / characters / items / player.knowledge
+    assert "(none)" in out  # locations / characters / items / player.log
 
 
 def test_render_is_deterministic():

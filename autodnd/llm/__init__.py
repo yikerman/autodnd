@@ -1,8 +1,8 @@
 """LLM agent surface for AutoDND.
 
-All three agents (Director, Narrator, Sidebar) target a single
-OpenAI-compatible endpoint configured via env: ``MODEL_ENDPOINT``,
-``MODEL_KEY``, ``MODEL_NAME``. See ``.env.example``.
+Both agents (Director, Sidebar) target a single OpenAI-compatible endpoint
+configured via env: ``MODEL_ENDPOINT``, ``MODEL_KEY``, ``MODEL_NAME``. See
+``.env.example``.
 """
 
 import os

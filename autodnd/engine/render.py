@@ -2,14 +2,12 @@
 
 Source of truth: ``plan/PLAN.md`` "Rendering — single tree projection".
 
-The Narrator never reads the world — only the Director. So this is the only
-projection. Output is deterministic (sorted by id within each section) so
-prompt caching and snapshot tests stay stable.
+Only the Director reads the world. Output is deterministic (sorted by id
+within each section) so prompt caching and snapshot tests stay stable.
 
 Shape::
 
     # World (turn N)
-    Next Event.t must be ≥ M.
 
     ## Threads
     ### root_thread — Display Name
@@ -44,12 +42,8 @@ def render_omniscient(world: WorldModel) -> str:
     for tid in events_of_thread:
         events_of_thread[tid].sort(key=lambda e: e.t)
 
-    next_t = max((e.t for e in world.events.values()), default=-1) + 1
-
     lines: list[str] = [
         f"# World (turn {world.turn})",
-        "",
-        f"Next `Event.t` must be ≥ {next_t}.",
         "",
         "## Threads",
         "",
@@ -143,14 +137,11 @@ def render_omniscient(world: WorldModel) -> str:
     items_str = ", ".join(f"`{i}`" for i in p.items) if p.items else "—"
     lines.append(f"Items: {items_str}")
     lines.append("")
-    lines.append("Knowledge (chronological, oldest first):")
-    if not p.knowledge:
+    lines.append("Player log (chronological, oldest first):")
+    if not p.log:
         lines.append("- (none)")
-    for ke in p.knowledge:
-        marker = (
-            f"[event:`{ke.event_id}`]" if ke.event_id is not None else "[assumption]"
-        )
-        lines.append(f"- (learned_at={ke.learned_at}) {marker} {ke.text}")
+    for entry in p.log:
+        lines.append(f"- {entry}")
     lines.append("")
 
     return "\n".join(lines)

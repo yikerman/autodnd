@@ -1,11 +1,7 @@
 """REPL entry point for AutoDND.
 
-Per turn: free-text input → Director (omniscient + dice tools) → validator/apply →
-Narrator (no world access; restyles beats) → prose. Slash commands route to
-the Sidebar (read-only Q&A over the player's own state).
-
-On validator failure, the Director gets one retry with the errors appended;
-a second failure aborts the turn with a brief error message.
+Per turn: free-text input → Director (omniscient + dice/mutation tools) → prose.
+Slash commands route to the Sidebar (read-only Q&A over the player's own state).
 """
 
 from __future__ import annotations
@@ -18,16 +14,14 @@ import sys
 from blessed import Terminal
 from dotenv import load_dotenv
 
-from autodnd.engine.delta import (
-    BootstrapDirective,
-    apply_bootstrap,
-    apply_world_delta,
-)
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
-from autodnd.fixtures import inn_scene_bootstrap
+from autodnd.fixtures import seed_inn_scene
 from autodnd.llm import tracing
-from autodnd.llm.director import run_bootstrap_director, run_turn_director
-from autodnd.llm.narrator import run_narrator
+from autodnd.llm.director import (
+    bootstrap_user_message,
+    run_director,
+    turn_user_message,
+)
 from autodnd.llm.sidebar import run_sidebar
 
 T = Terminal()
@@ -61,43 +55,38 @@ def _empty_world() -> WorldModel:
 
 def initialize_session(
     *, demo_scene: bool, rng: random.Random
-) -> tuple[WorldModel, BootstrapDirective]:
+) -> tuple[WorldModel, str, list[int]]:
+    """Returns (seeded world, opening prose, scene_boundaries)."""
     world = _empty_world()
-    directive = inn_scene_bootstrap() if demo_scene else run_bootstrap_director(rng=rng)
-    errors = apply_bootstrap(world, directive)
-    if errors:
-        msg = "Bootstrap rejected:\n" + "\n".join(
-            f"  - {e.code} at {e.field_path}: {e.detail}" for e in errors
+    scene_boundaries: list[int] = []
+    if demo_scene:
+        opening_prose = seed_inn_scene(world)
+    else:
+        opening_prose = run_director(
+            world,
+            bootstrap_user_message(),
+            rng,
+            scene_boundaries=scene_boundaries,
         )
-        raise SystemExit(msg)
-    return world, directive
+        world.turn = 0
+    return world, opening_prose, scene_boundaries
 
 
 def run_turn(
     world: WorldModel,
     player_input: str,
     prior_prose: str,
-    narration_history: list[str],
     rng: random.Random,
+    scene_boundaries: list[int],
 ) -> str:
-    directive = run_turn_director(world, player_input, prior_prose, rng)
-    errors = apply_world_delta(world, directive.world_delta)
-    if errors:
-        retry_input = (
-            f"{player_input}\n\n"
-            "## Your previous directive was rejected\n\n"
-            + "\n".join(f"- {e.code} at `{e.field_path}`: {e.detail}" for e in errors)
-            + "\n\nRevise and emit a valid directive."
-        )
-        directive = run_turn_director(world, retry_input, prior_prose, rng)
-        errors = apply_world_delta(world, directive.world_delta)
-        if errors:
-            return "[DM error: directive invalid after retry; please rephrase]"
-
-    if not directive.beats:
-        return "[the DM pauses, awaiting clearer intent]"
-
-    return run_narrator(directive.beats, narration_history, world_turn=world.turn)
+    prose = run_director(
+        world,
+        turn_user_message(world, player_input, prior_prose),
+        rng,
+        scene_boundaries=scene_boundaries,
+    )
+    world.turn += 1
+    return prose
 
 
 def handle_slash(line: str, world: WorldModel) -> str:
@@ -168,8 +157,7 @@ _PROMPT = _rl_safe(str(T.bold_green)) + "> " + _rl_safe(str(T.bold_cyan))
 
 
 def _read_input() -> str | None:
-    """Prompt the user. Returns None on EOF / Ctrl-C. Arrow keys + history come
-    free from `readline` having been imported at module top."""
+    """Prompt the user. Returns None on EOF / Ctrl-C."""
     try:
         line = input(_PROMPT)
     except EOFError, KeyboardInterrupt:
@@ -193,11 +181,11 @@ def main() -> None:
     if trace_path:
         print(T.bright_black(f"Trace log: {trace_path}"), file=sys.stderr)
     print(T.bright_black("Initializing world…"), file=sys.stderr)
-    world, directive = initialize_session(demo_scene=args.demo_scene, rng=rng)
-    opening_prose = run_narrator(directive.opening_beats, [], world_turn=world.turn)
-    narration_history: list[str] = [opening_prose]
-    prior_prose = opening_prose
+    world, opening_prose, scene_boundaries = initialize_session(
+        demo_scene=args.demo_scene, rng=rng
+    )
 
+    prior_prose = opening_prose
     _print_block(opening_prose, kind="prose")
 
     while True:
@@ -209,10 +197,10 @@ def main() -> None:
         try:
             if line.startswith("/"):
                 output = handle_slash(line, world)
-                kind = "banner" if line in {"/help"} else "sidebar"
+                kind = "banner" if line == "/help" else "sidebar"
                 _print_block(output, kind=kind)
             else:
-                output = run_turn(world, line, prior_prose, narration_history, rng)
+                output = run_turn(world, line, prior_prose, rng, scene_boundaries)
                 if _is_status_message(output):
                     _print_block(
                         output,
@@ -220,7 +208,6 @@ def main() -> None:
                     )
                 else:
                     prior_prose = output
-                    narration_history.append(output)
                     _print_block(output, kind="prose")
         except SystemExit:
             return

@@ -6,10 +6,11 @@ Three layers:
 
 - Atoms: :class:`Location`, :class:`Item`, :class:`Event`
 - Organization: :class:`Character` (NPC only), :class:`Thread` (forest via ``parent_id``)
-- Perspective: :class:`KnowledgeEntry`, :class:`PlayerState`
+- Perspective: :class:`PlayerState` (with append-only NL ``log``)
 
 Mutation lives in ``engine/delta.py``; these schemas are pure data. Per-field
-mutability policy is enforced by the validator there, not by these models.
+mutability policy is enforced by the per-mutation ``apply_*`` functions there,
+not by these models.
 """
 
 from pydantic import BaseModel, Field
@@ -57,7 +58,7 @@ class Character(BaseModel):
 
 class Event(BaseModel):
     id: str
-    t: int
+    t: int  # engine-assigned, monotonic across the session
     narrative_time: str
     location_id: str
     participants: list[str] = Field(default_factory=list)
@@ -72,17 +73,13 @@ class Thread(BaseModel):
     description: str
 
 
-class KnowledgeEntry(BaseModel):
-    event_id: str | None = None
-    text: str
-    learned_at: int
-
-
 class PlayerState(BaseModel):
     location_id: str
     stats: CharacterStats
     items: list[str] = Field(default_factory=list)
-    knowledge: list[KnowledgeEntry] = Field(default_factory=list)
+    log: list[str] = Field(
+        default_factory=list
+    )  # append-only NL log of player perception
 
 
 class WorldModel(BaseModel):
@@ -93,3 +90,4 @@ class WorldModel(BaseModel):
     threads: dict[str, Thread] = Field(default_factory=dict)
     player: PlayerState
     turn: int
+    next_event_t: int = 0  # engine-managed; mint_event reads + increments

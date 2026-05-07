@@ -97,10 +97,3 @@ def log_agent_call(
 
     with _TRACE_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-
-
-def reset_for_tests() -> None:
-    """Reset module state. Tests use this to ensure isolation."""
-    global _TRACE_FILE, _STEP_COUNTER
-    _TRACE_FILE = None
-    _STEP_COUNTER = 0

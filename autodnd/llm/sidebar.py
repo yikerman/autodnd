@@ -1,7 +1,7 @@
 """Sidebar agent: read-only Q&A over the player's own state.
 
-Separate session from Director and Narrator — its conversation never feeds
-back into theirs, so mechanical chatter doesn't pollute narrative context.
+Separate session from the Director — its conversation never feeds back into
+the Director's, so mechanical chatter doesn't pollute narrative context.
 """
 
 import time
@@ -49,12 +49,7 @@ def _format_player_state(p: PlayerState, items: Mapping[str, Item]) -> str:
     else:
         items_block = "  (none)"
 
-    if p.knowledge:
-        knowledge_lines = "\n".join(
-            f"- (turn {ke.learned_at}) {ke.text}" for ke in p.knowledge
-        )
-    else:
-        knowledge_lines = "(none)"
+    log_lines = "\n".join(f"- {entry}" for entry in p.log) if p.log else "(none)"
 
     return (
         f"Location: {p.location_id}\n"
@@ -64,7 +59,7 @@ def _format_player_state(p: PlayerState, items: Mapping[str, Item]) -> str:
         f"Base mods: {_format_mods(s.mods)}\n"
         f"Effective mods (with carried items): {_format_mods(eff)}\n"
         f"Items:\n{items_block}\n\n"
-        f"Knowledge log:\n{knowledge_lines}"
+        f"Player log:\n{log_lines}"
     )
 
 

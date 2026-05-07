@@ -9,7 +9,6 @@ from autodnd.engine.world import (
     CharacterStats,
     Event,
     Item,
-    KnowledgeEntry,
     Location,
     PlayerState,
     Thread,
@@ -63,13 +62,10 @@ def _build_minimal_world() -> WorldModel:
             location_id="inn",
             stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2}),
             items=["shortsword"],
-            knowledge=[
-                KnowledgeEntry(
-                    event_id="e0", text="You reached the inn at dusk.", learned_at=-1
-                ),
-            ],
+            log=["You reached the inn at dusk."],
         ),
         turn=0,
+        next_event_t=1,
     )
 
 
@@ -79,22 +75,23 @@ def test_round_trip_preserves_shape():
     assert rebuilt == world
 
 
-def test_pure_assumption_knowledge_entry():
-    """KnowledgeEntry.event_id is Optional → None for pure assumptions."""
-    entry = KnowledgeEntry(text="I assume the kingdom is at peace.", learned_at=-1)
-    assert entry.event_id is None
-    rebuilt = KnowledgeEntry.model_validate(entry.model_dump())
-    assert rebuilt == entry
-
-
 def test_root_thread_has_no_parent():
     thread = Thread(id="root", name="root arc", description="...")
     assert thread.parent_id is None
 
 
+def test_next_event_t_defaults_to_zero():
+    """Fresh WorldModel starts the event-time counter at 0."""
+    world = WorldModel(
+        player=PlayerState(location_id="", stats=CharacterStats(hp=0, ac=0)),
+        turn=-1,
+    )
+    assert world.next_event_t == 0
+
+
 def test_loads_worked_example_shaped_payload():
     """Stripped-down bootstrap JSON from plan/example.md — exercises every field
-    a BootstrapDirective would land in WorldModel after apply."""
+    a bootstrapped world would land in after the Director's tool calls."""
     payload = {
         "locations": {
             "inn": {
@@ -118,6 +115,7 @@ def test_loads_worked_example_shaped_payload():
                 "id": "persuasion_skill",
                 "name": "persuasion (skill)",
                 "description": "Trained ability — Mara can read a room.",
+                "effects": {"persuasion": 2},
             },
         },
         "characters": {
@@ -167,18 +165,15 @@ def test_loads_worked_example_shaped_payload():
             "location_id": "inn",
             "stats": {"hp": 24, "ac": 13, "mods": {"persuasion": 2}},
             "items": ["sealed_letter", "persuasion_skill"],
-            "knowledge": [
-                {
-                    "event_id": "e_arrival",
-                    "text": "You reached the Crow's Foot Inn at dusk.",
-                    "learned_at": -1,
-                },
-            ],
+            "log": ["You reached the Crow's Foot Inn at dusk."],
         },
         "turn": 0,
+        "next_event_t": 6,
     }
     world = WorldModel.model_validate(payload)
     assert world.player.stats.mods["persuasion"] == 2
     assert world.events["e_treaty"].t == 0
     assert world.threads["inn_night"].parent_id == "tensions"
-    assert world.player.knowledge[0].event_id == "e_arrival"
+    assert world.player.log[0] == "You reached the Crow's Foot Inn at dusk."
+    assert world.items["persuasion_skill"].effects["persuasion"] == 2
+    assert world.next_event_t == 6

@@ -1,9 +1,8 @@
-"""Test the hardcoded inn-scene bootstrap fixture round-trips through the engine."""
+"""Tests for the inn-scene seed fixture."""
 
-from autodnd.engine.delta import apply_bootstrap
 from autodnd.engine.render import render_omniscient
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
-from autodnd.fixtures import inn_scene_bootstrap
+from autodnd.fixtures import seed_inn_scene
 
 
 def _empty_world() -> WorldModel:
@@ -13,15 +12,9 @@ def _empty_world() -> WorldModel:
     )
 
 
-def test_inn_scene_bootstrap_applies_cleanly():
+def test_seed_inn_scene_seeds_full_world():
     world = _empty_world()
-    errors = apply_bootstrap(world, inn_scene_bootstrap())
-    assert errors == [], f"unexpected validation errors: {errors}"
-
-
-def test_inn_scene_bootstrap_produces_expected_world():
-    world = _empty_world()
-    apply_bootstrap(world, inn_scene_bootstrap())
+    prose = seed_inn_scene(world)
 
     assert world.turn == 0
     assert len(world.locations) == 6
@@ -29,10 +22,11 @@ def test_inn_scene_bootstrap_produces_expected_world():
     assert len(world.items) == 4
     assert len(world.threads) == 3
     assert len(world.events) == 6
-    assert len(world.player.knowledge) == 5
+    assert len(world.player.log) == 5
+    assert world.next_event_t == 6  # 6 events minted at t=0..5
 
     assert world.player.location_id == "inn"
-    # persuasion +2 lives on the persuasion_skill item, not on stats.mods
+    # persuasion +2 lives on the persuasion_skill item's effects
     assert world.items["persuasion_skill"].effects == {"persuasion": 2}
     assert "persuasion_skill" in world.player.items
     assert "sealed_letter" in world.player.items
@@ -46,32 +40,22 @@ def test_inn_scene_bootstrap_produces_expected_world():
     ts = sorted(e.t for e in world.events.values())
     assert ts == [0, 1, 2, 3, 4, 5]
 
+    # Returns non-empty opening prose mentioning the inn
+    assert prose
+    assert "Crow's Foot" in prose
 
-def test_inn_scene_bootstrap_renders_to_markdown():
+
+def test_seed_inn_scene_renders_to_markdown():
     world = _empty_world()
-    apply_bootstrap(world, inn_scene_bootstrap())
+    seed_inn_scene(world)
     out = render_omniscient(world)
 
-    # All character names appear by name (not just id)
     for name in ("Hadrian", "Spymaster Korel", "Olwen", "Grell"):
         assert name in out
 
     # Hadrian's hidden role is canon (omniscient view)
     assert "Informant for Grell's bandit crew" in out
 
-    # Knowledge timeline shows the player's POV (not the omniscient truth)
+    # Player log shows the player's POV
     assert "Tomas died" in out
     assert "Discretion" in out
-
-    # Next event t hint
-    assert "Next `Event.t` must be ≥ 6" in out
-
-
-def test_inn_scene_bootstrap_includes_opening_beats():
-    directive = inn_scene_bootstrap()
-    # 5 opening beats from the worked example
-    assert len(directive.opening_beats) == 5
-    speakers = [b.speaker for b in directive.opening_beats if b.speaker is not None]
-    assert speakers == ["Hadrian"]
-    kinds = {b.kind for b in directive.opening_beats}
-    assert kinds == {"observation", "action", "dialogue"}
