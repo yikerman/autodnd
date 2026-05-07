@@ -1,0 +1,31 @@
+name: Linting and Testing
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.1.0
+      with:
+        enable-cache: true
+
+    - name: Set up Project
+      run: uv sync
+
+    - name: Run Pyright Type Checker
+      run: uv run pyright
+
+    - name: Run Ruff Linter
+      run: uv run ruff check .
+
+    - name: Run Pytest
+      run: uv run pytest
