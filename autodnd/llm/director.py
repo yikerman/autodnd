@@ -69,13 +69,13 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
 
     @agent.tool
     def roll_dice(ctx: RunContext[DirectorDeps], spec: str) -> int:
-        """Roll a dice expression like ``2d6+3`` or ``d20``. Returns the sum."""
+        """Roll a dice expression like `2d6+3` or `d20`; returns the sum."""
         return roll(spec, ctx.deps.rng)
 
     @agent.tool
     def check(ctx: RunContext[DirectorDeps], skill: str, dc: int) -> Resolution:
-        """Resolve a player skill check: d20 + bonus vs DC. Bonus = ``stats.mods[skill]``
-        plus the sum of ``effects[skill]`` from every carried item."""
+        """Resolve a skill check: d20 + bonus vs `dc`. Bonus = `stats.mods[skill]`
+        + carried items' `effects[skill]`."""
         world = ctx.deps.world
         mods = effective_mods(world.player.stats, world.player.items, world.items)
         return resolve_check(skill, dc, mods, ctx.deps.rng)
@@ -84,13 +84,13 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def attack(
         ctx: RunContext[DirectorDeps], attack_mod: int, target_ac: int
     ) -> Resolution:
-        """Resolve an attack roll: d20 + ``attack_mod`` vs ``target_ac``."""
+        """Resolve an attack roll: d20 + `attack_mod` vs `target_ac`."""
         return resolve_attack(attack_mod, target_ac, ctx.deps.rng)
 
     @agent.tool
     def save(ctx: RunContext[DirectorDeps], save_kind: str, dc: int) -> Resolution:
-        """Resolve a player saving throw: d20 + bonus vs DC. Bonus = ``stats.mods[save_kind]``
-        plus the sum of ``effects[save_kind]`` from every carried item."""
+        """Resolve a saving throw: d20 + bonus vs `dc`. Bonus = `stats.mods[save_kind]`
+        + carried items' `effects[save_kind]`."""
         world = ctx.deps.world
         mods = effective_mods(world.player.stats, world.player.items, world.items)
         return resolve_save(save_kind, dc, mods, ctx.deps.rng)
@@ -101,7 +101,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def create_location(
         ctx: RunContext[DirectorDeps], id: str, name: str, description: str
     ) -> str:
-        """Mint a new Location. Returns ``"ok"`` or an error string."""
+        """Mint a `Location`."""
         return _ok_or_err(
             apply_create_location(
                 ctx.deps.world, id=id, name=name, description=description
@@ -117,8 +117,8 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         location_id: str,
         stats: CharacterStats,
     ) -> str:
-        """Mint a new NPC. The player is NOT a Character — for the player use
-        ``move_player`` / ``update_player_stats`` / ``add_player_item``."""
+        """Mint an NPC. The player is not a `Character`; use the `*_player`
+        tools for the player."""
         return _ok_or_err(
             apply_create_character(
                 ctx.deps.world,
@@ -138,9 +138,9 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         description: str,
         effects: dict[str, int],
     ) -> str:
-        """Mint a new Item. ``effects`` is the mechanical-bonus map (e.g.
-        ``{"persuasion": 2}`` for a trained skill, ``{"attack": 1}`` for a +1 sword,
-        ``{}`` for flavor-only items)."""
+        """Mint an `Item`. `effects` carries mechanics: `{"persuasion": 2}` for
+        a +2 training, `{"attack": 1}` for a +1 sword, `{}` for flavor-only.
+        `description` carries flavor and quantity."""
         return _ok_or_err(
             apply_create_item(
                 ctx.deps.world,
@@ -159,7 +159,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         parent_id: str | None,
         description: str,
     ) -> str:
-        """Mint a new Thread. Pass ``parent_id=None`` for a root thread."""
+        """Mint a `Thread`. Pass `parent_id=None` for a root thread."""
         return _ok_or_err(
             apply_create_thread(
                 ctx.deps.world,
@@ -180,9 +180,9 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         description: str,
         thread_id: str,
     ) -> str:
-        """Mint a canonical Event. Engine assigns ``Event.t`` from ``world.next_event_t``.
-        Use ``participants=[]`` for events with no character witnesses (backstory,
-        weather, narration). Events are immutable once minted."""
+        """Mint an immutable `Event`. Engine assigns `t`. Pass `participants=[]`
+        for events with no character witnesses (backstory, weather, pure
+        narration)."""
         return _ok_or_err(
             apply_mint_event(
                 ctx.deps.world,
@@ -201,7 +201,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_thread_description(
         ctx: RunContext[DirectorDeps], id: str, description: str
     ) -> str:
-        """Replace a thread's description (the arc has evolved)."""
+        """Replace a thread's description; use when the arc has evolved."""
         return _ok_or_err(
             apply_update_thread_description(
                 ctx.deps.world, id=id, description=description
@@ -212,8 +212,10 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_item_description(
         ctx: RunContext[DirectorDeps], id: str, description: str
     ) -> str:
-        """Replace an item's description (state changed: charges consumed,
-        condition, count, etc.)."""
+        """Replace an item's description. The description is where quantity and
+        condition live (coin in a pouch, charges, durability), so update it
+        whenever prose implies any of those changed — otherwise next turn's
+        render will contradict you."""
         return _ok_or_err(
             apply_update_item_description(
                 ctx.deps.world, id=id, description=description
@@ -231,7 +233,8 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_character_stats(
         ctx: RunContext[DirectorDeps], id: str, stats: CharacterStats
     ) -> str:
-        """Replace an NPC's stats wholesale (HP changed, condition changed, etc.)."""
+        """Replace an NPC's stats wholesale. Use whenever prose implies their
+        HP, AC, or condition changed."""
         return _ok_or_err(
             apply_update_character_stats(ctx.deps.world, id=id, stats=stats)
         )
@@ -245,29 +248,32 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_player_stats(
         ctx: RunContext[DirectorDeps], stats: CharacterStats
     ) -> str:
-        """Replace the player's stats wholesale (HP changed, ability change, etc.)."""
+        """Replace the player's stats wholesale. Use whenever prose implies the
+        player's HP, AC, or ability scores changed."""
         return _ok_or_err(apply_update_player_stats(ctx.deps.world, stats=stats))
 
     @agent.tool
     def add_player_item(ctx: RunContext[DirectorDeps], item_id: str) -> str:
-        """Give the player an item (must already exist via ``create_item``)."""
+        """Give the player an item (must already exist via `create_item`). Use
+        whenever prose implies the player picked up or received it."""
         return _ok_or_err(apply_add_player_item(ctx.deps.world, item_id=item_id))
 
     @agent.tool
     def remove_player_item(ctx: RunContext[DirectorDeps], item_id: str) -> str:
-        """Take an item from the player (must currently be carried)."""
+        """Take an item from the player (they must currently be carrying it).
+        Use whenever prose implies the player gave it away, dropped, or lost it."""
         return _ok_or_err(apply_remove_player_item(ctx.deps.world, item_id=item_id))
 
     @agent.tool
     def append_player_log(ctx: RunContext[DirectorDeps], text: str) -> str:
-        """Append an NL log entry — what the player perceived this turn (or
-        misinterpreted, or assumed). Always succeeds."""
+        """Append a log entry capturing what the player perceived (or
+        misinterpreted, or assumed) this turn, written in their voice."""
         return _ok_or_err(apply_append_player_log(ctx.deps.world, text=text))
 
     @agent.tool
     def mark_end_scene(ctx: RunContext[DirectorDeps]) -> str:
-        """Mark the current turn as a scene boundary. Records ``world.turn`` so
-        the engine can group events by scene later."""
+        """Mark this turn as a scene boundary so the engine can group events by
+        scene. Call when the current scene closes."""
         ctx.deps.scene_boundaries.append(ctx.deps.world.turn)
         return "ok"
 
@@ -278,13 +284,9 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
 
 
 def bootstrap_user_message() -> str:
-    return (
-        "## Bootstrap mode\n\n"
-        "World is empty (`turn = -1`). Mint the initial world: locations, "
-        "characters, items, threads, backstory events (use `narrative_time` "
-        "strings like 'year 1043, spring'), the player's initial stats and "
-        "items, and the player log (one entry for each thing the PC remembers "
-        "or has just experienced). Then write the opening prose."
+    raise NotImplementedError(
+        "Bootstrap is being reworked into an interactive character / world-"
+        "building dialogue. For now, start sessions with `--demo-scene`."
     )
 
 
@@ -323,14 +325,18 @@ def run_director(
         result=result,
         latency_ms=(time.monotonic() - start) * 1000,
     )
-    # Concatenate every TextPart across all model responses. The model may emit
-    # prose both before and after tool calls in the same run; `result.output`
-    # only carries the final text part, so prose written before a tool call
-    # would otherwise be lost.
-    chunks: list[str] = []
+    # Keep only text parts from the final ModelResponse. Prompt instructs the
+    # Director to emit one prose block at the end after all tool calls; if the
+    # model drafts prose mid-run and rewrites it, the final response is the
+    # canonical one.
+    final_response: ModelResponse | None = None
     for msg in result.all_messages():
         if isinstance(msg, ModelResponse):
-            for part in msg.parts:
-                if isinstance(part, TextPart) and part.content:
-                    chunks.append(part.content)
-    return "\n\n".join(chunks)
+            final_response = msg
+    if final_response is None:
+        return ""
+    return "\n\n".join(
+        part.content
+        for part in final_response.parts
+        if isinstance(part, TextPart) and part.content
+    )

@@ -1,8 +1,5 @@
 """Per-mutation validators + appliers for AutoDND.
 
-Source of truth: ``plan/PLAN.md`` "Tool surface" and the per-field mutability
-table in "Why this shape".
-
 Each ``apply_*`` function validates a single mutation and either applies it
 to ``world`` in place (returning ``None``) or rejects it (returning a
 :class:`ValidationError` describing why). The Director's LLM tools wrap these

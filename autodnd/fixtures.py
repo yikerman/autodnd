@@ -1,7 +1,7 @@
 """Hardcoded inn-scene fixture used by tests and the demo REPL path.
 
-:func:`seed_inn_scene` mints the worked example from ``plan/example.md``:
-Mara is a courier from Vellor carrying spymaster Korel's sealed letter to
+:func:`seed_inn_scene` mints a worked example: Mara, a courier from Vellor
+carrying spymaster Korel's sealed letter to
 Olwen across the Sken border. She's stopping at the Crow's Foot Inn for the
 night. The innkeeper Hadrian is secretly a bandit-crew informant. The seed
 mints all canon up to her arrival at dusk; play begins from there.

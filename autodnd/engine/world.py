@@ -1,7 +1,5 @@
 """World Model schemas for AutoDND.
 
-Source of truth: ``plan/PLAN.md`` "World Model" section.
-
 Three layers:
 
 - Atoms: :class:`Location`, :class:`Item`, :class:`Event`

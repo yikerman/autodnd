@@ -1,7 +1,5 @@
 """Markdown projection of :class:`WorldModel` for the Director's prompt.
 
-Source of truth: ``plan/PLAN.md`` "Rendering — single tree projection".
-
 Only the Director reads the world. Output is deterministic (sorted by id
 within each section) so prompt caching and snapshot tests stay stable.
 

@@ -90,8 +90,8 @@ def test_next_event_t_defaults_to_zero():
 
 
 def test_loads_worked_example_shaped_payload():
-    """Stripped-down bootstrap JSON from plan/example.md — exercises every field
-    a bootstrapped world would land in after the Director's tool calls."""
+    """Stripped-down bootstrap JSON exercising every field a bootstrapped world
+    would land in after the Director's tool calls."""
     payload = {
         "locations": {
             "inn": {

@@ -7,6 +7,7 @@ playtest, not here.
 
 import random
 
+import pytest
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -138,10 +139,11 @@ def test_director_mark_end_scene_records_turn():
     assert boundaries == [7]
 
 
-def test_run_director_concatenates_prose_before_and_after_tool_calls():
-    """When the model emits prose both before AND after a tool call, both
-    chunks must reach the player. Regression for a turn where only the
-    post-tool-call coda was returned, leaving the player without context."""
+def test_run_director_keeps_only_final_prose_block():
+    """The Director is prompted to emit prose once, at the end. If the model
+    drafts a complete narrative early and then writes another after more tool
+    calls, only the final block is shown to the player — otherwise the player
+    sees stacked, near-duplicate turn endings."""
     world = _seeded_world()
 
     step = {"n": 0}
@@ -151,7 +153,7 @@ def test_run_director_concatenates_prose_before_and_after_tool_calls():
         if step["n"] == 1:
             return ModelResponse(
                 parts=[
-                    TextPart("First chunk: directions to Mawley."),
+                    TextPart("Draft block. **What do you do?**"),
                     ToolCallPart(
                         tool_name="append_player_log",
                         args={"text": "Hadrian gave directions."},
@@ -159,7 +161,7 @@ def test_run_director_concatenates_prose_before_and_after_tool_calls():
                     ),
                 ]
             )
-        return ModelResponse(parts=[TextPart("Second chunk: the question hangs.")])
+        return ModelResponse(parts=[TextPart("Final block. **What do you do?**")])
 
     output = run_director(
         world,
@@ -168,15 +170,14 @@ def test_run_director_concatenates_prose_before_and_after_tool_calls():
         model=FunctionModel(model_fn),
     )
 
-    assert "First chunk: directions to Mawley." in output
-    assert "Second chunk: the question hangs." in output
-    assert output.index("First chunk") < output.index("Second chunk")
+    assert output == "Final block. **What do you do?**"
 
 
-def test_bootstrap_user_message_signals_bootstrap_mode():
-    msg = bootstrap_user_message()
-    assert "Bootstrap mode" in msg
-    assert "turn = -1" in msg
+def test_bootstrap_user_message_is_not_implemented():
+    """Bootstrap is being reworked into an interactive flow; the old static
+    trigger is gated until that lands."""
+    with pytest.raises(NotImplementedError):
+        bootstrap_user_message()
 
 
 def test_turn_user_message_includes_world_render_and_input():
