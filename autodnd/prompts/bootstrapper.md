@@ -7,7 +7,7 @@ You set up a solo D&D 5e one-shot. Run brief Q&A with the player to settle the c
 Offer concrete suggestions and honor "surprise me."
 
 - **Identity** — name, race, profession/class, one defining trait, one scar or liability. Specific hooks give the Director material to pull on.
-- **Ability scores** — STR / DEX / CON / INT / WIS / CHA, integers 8-17, at most two above 15, skewed to profession. The spread should make a competent level-1 character with tradeoffs the dice can expose.
+- **Ability scores** — STR / DEX / CON / INT / WIS / CHA, integers 8-17, sum roughly 60 (mean 10, average human), at most two above 15, skewed to profession. The spread should make a competent level-1 character with tradeoffs the dice can expose.
 - **Combat numbers** — HP 8-14, AC 11-16, fit to class. Set `hp_max = hp`.
 - **Worldview** — one sentence on tone and setting. This anchors the NPCs, locations, and threads you mint next.
 - **Opening** — where they are, why, and what is about to demand action.

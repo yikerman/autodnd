@@ -9,13 +9,12 @@ from __future__ import annotations
 import argparse
 import random
 import readline  # noqa: F401  # imported for its side effect: arrow-key line editing in input()
-import sys
 from pathlib import Path
 
-from blessed import Terminal
 from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
 
+from autodnd.cli.output import print_block, print_status, read_input
 from autodnd.cli.persistence import load_session, save_session
 from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
 from autodnd.fixtures import seed_inn_scene
@@ -23,8 +22,6 @@ from autodnd.llm import tracing
 from autodnd.llm.bootstrapper import bootstrap_user_message, run_bootstrapper
 from autodnd.llm.director import run_director, turn_user_message
 from autodnd.llm.sidebar import run_sidebar
-
-T = Terminal()
 
 BANNER = """\
 AutoDND — solo one-shot DM. Type your action, or:
@@ -143,45 +140,11 @@ def _is_status_message(text: str) -> bool:
 
 
 def _print_block(text: str, *, kind: str = "prose") -> None:
-    """Print a standalone output block with appropriate color."""
-    if kind == "banner":
-        styled = T.cyan(text)
-    elif kind == "sidebar":
-        styled = T.yellow(text)
-    elif kind == "error":
-        styled = T.bright_red(text)
-    elif kind == "status":
-        styled = T.bright_black(text)
-    else:  # prose
-        styled = text
-    print()
-    print(styled)
-    print()
-
-
-def _rl_safe(seq: str) -> str:
-    """Wrap an ANSI escape so readline counts it as zero-width when computing
-    cursor positions during line editing / history recall."""
-    return f"\001{seq}\002"
-
-
-# Prompt = bold-green "> "; readline-safe escape transition into bold-cyan so
-# the user's keystrokes echo in cyan until we reset on Enter.
-_PROMPT = _rl_safe(str(T.bold_green)) + "> " + _rl_safe(str(T.bold_cyan))
+    print_block(text, kind=kind)
 
 
 def _read_input() -> str | None:
-    """Prompt the user. Returns None on EOF / Ctrl-C."""
-    try:
-        line = input(_PROMPT)
-    except (EOFError, KeyboardInterrupt):
-        sys.stdout.write(str(T.normal))
-        sys.stdout.flush()
-        print()
-        return None
-    sys.stdout.write(str(T.normal))
-    sys.stdout.flush()
-    return line.strip()
+    return read_input()
 
 
 def main() -> None:
@@ -193,16 +156,16 @@ def main() -> None:
 
     _print_block(BANNER, kind="banner")
     if trace_path:
-        print(T.bright_black(f"Trace log: {trace_path}"), file=sys.stderr)
+        print_status(f"Trace log: {trace_path}")
 
     if args.load is not None:
-        print(T.bright_black(f"Loading session from {args.load}…"), file=sys.stderr)
+        print_status(f"Loading session from {args.load}…")
         snap = load_session(args.load)
         world, prior_prose = snap.world, snap.prior_prose
         if prior_prose:
             _print_block(prior_prose[-1], kind="prose")
     else:
-        print(T.bright_black("Initializing world…"), file=sys.stderr)
+        print_status("Initializing world…")
         world, opening_prose = initialize_session(demo_scene=args.demo_scene)
         prior_prose = [opening_prose]
         # Demo path prints opening here. LLM path's bootstrapper loop already
