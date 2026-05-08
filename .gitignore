@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Test session
+test.json
+
 # Secrets
 .env
 
