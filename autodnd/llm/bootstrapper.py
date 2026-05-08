@@ -27,6 +27,7 @@ from autodnd.engine.delta import (
     apply_create_thread,
     apply_mint_event,
     apply_move_player,
+    apply_set_player_gold,
     apply_update_player_stats,
 )
 from autodnd.engine.world import CharacterStats, WorldModel
@@ -59,7 +60,7 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
     def create_location(
         ctx: RunContext[BootstrapperDeps], id: str, name: str, description: str
     ) -> str:
-        """Mint a `Location`."""
+        """Mint a location the session can reference."""
         return _ok_or_err(
             apply_create_location(
                 ctx.deps.world, id=id, name=name, description=description
@@ -75,8 +76,7 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
         location_id: str,
         stats: CharacterStats,
     ) -> str:
-        """Mint an NPC. The player is not a `Character`; use the `*_player`
-        tools for the player."""
+        """Mint an NPC at a known location. Player state uses player tools."""
         return _ok_or_err(
             apply_create_character(
                 ctx.deps.world,
@@ -96,9 +96,7 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
         description: str,
         effects: dict[str, int],
     ) -> str:
-        """Mint an `Item`. `effects` carries mechanics: `{"persuasion": 2}` for
-        a +2 training, `{"attack": 1}` for a +1 sword, `{}` for flavor-only.
-        `description` carries flavor and quantity."""
+        """Mint an item. Effects are mechanical bonuses; description is fictional state."""
         return _ok_or_err(
             apply_create_item(
                 ctx.deps.world,
@@ -117,7 +115,7 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
         parent_id: str | None,
         description: str,
     ) -> str:
-        """Mint a `Thread`. Pass `parent_id=None` for a root thread."""
+        """Mint a plot thread. Use `parent_id=None` for a root thread."""
         return _ok_or_err(
             apply_create_thread(
                 ctx.deps.world,
@@ -138,9 +136,7 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
         description: str,
         thread_id: str,
     ) -> str:
-        """Mint an immutable `Event`. Engine assigns `t`. Pass `participants=[]`
-        for events with no character witnesses (backstory, weather, pure
-        narration)."""
+        """Mint a canonical event. Use for history, discoveries, consequences, or notable changes."""
         return _ok_or_err(
             apply_mint_event(
                 ctx.deps.world,
@@ -159,34 +155,37 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
     def move_player(
         ctx: RunContext[BootstrapperDeps], location_id: str
     ) -> str:
-        """Place the player at a location."""
+        """Place the player at a known location."""
         return _ok_or_err(apply_move_player(ctx.deps.world, location_id=location_id))
 
     @agent.tool
     def update_player_stats(
         ctx: RunContext[BootstrapperDeps], stats: CharacterStats
     ) -> str:
-        """Set the player's stats wholesale (HP, AC, ability scores, mods)."""
+        """Set player HP, AC, abilities, and mods."""
         return _ok_or_err(apply_update_player_stats(ctx.deps.world, stats=stats))
 
     @agent.tool
+    def set_player_gold(ctx: RunContext[BootstrapperDeps], gold: int) -> str:
+        """Set the player's starting gold."""
+        return _ok_or_err(apply_set_player_gold(ctx.deps.world, gold=gold))
+
+    @agent.tool
     def add_player_item(ctx: RunContext[BootstrapperDeps], item_id: str) -> str:
-        """Give the player an item (must already exist via `create_item`)."""
+        """Add an existing item to the player's inventory."""
         return _ok_or_err(apply_add_player_item(ctx.deps.world, item_id=item_id))
 
     @agent.tool
     def append_player_log(ctx: RunContext[BootstrapperDeps], text: str) -> str:
-        """Append a log entry in the player's voice — what they remember,
-        believe, or assume going into the opening scene."""
+        """Append player-facing memory, belief, rumor, or assumption."""
         return _ok_or_err(apply_append_player_log(ctx.deps.world, text=text))
 
     # ---------- Handoff ----------
 
     @agent.tool
     def begin_play(ctx: RunContext[BootstrapperDeps]) -> str:
-        """Hand off to the Director and start turn 0. Validates that minimum
-        canon exists (>=1 location, >=1 thread, >=1 event, player placed with
-        hp > 0). Returns an error listing missing invariants if called early."""
+        """Hand off to the Director and start turn 0. Requires location, thread,
+        event, player location, and positive HP."""
         world = ctx.deps.world
         missing: list[str] = []
         if not world.locations:
@@ -212,13 +211,9 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
 
 def bootstrap_user_message() -> str:
     return (
-        "We're starting a solo D&D 5e one-shot. Run a short Q&A with the player "
-        "to settle their character, the situation, and the opening scene. Mint "
-        "canon (locations, threads, NPCs, items, events, player state) as "
-        "decisions firm up. Call `begin_play` when the world has at least one "
-        "location, one thread, one event, and the player is placed with hp > 0; "
-        "after `begin_play` succeeds, write the opening prose in 2nd person. "
-        "Begin by greeting the player and asking your first question."
+        "Start a solo D&D 5e one-shot setup. Ask the first focused question to "
+        "settle the player character, tone, and opening premise. As answers firm "
+        "up, mint canon, set starting gold, and call `begin_play` when the world is ready."
     )
 
 

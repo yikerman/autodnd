@@ -14,6 +14,7 @@ from autodnd.engine.delta import (
     apply_create_thread,
     apply_mint_event,
     apply_move_player,
+    apply_set_player_gold,
     apply_update_player_stats,
 )
 from autodnd.engine.render import render_omniscient
@@ -84,6 +85,7 @@ def _bootstrapped_world() -> WorldModel:
     apply_update_player_stats(
         world, stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2})
     )
+    apply_set_player_gold(world, gold=50)
     apply_add_player_item(world, item_id="sword")
     apply_append_player_log(world, text="You reached the inn at dusk.")
     apply_append_player_log(world, text="You assume the kingdom is at peace.")
@@ -132,6 +134,7 @@ def test_render_player_log_appears_in_order():
 def test_render_player_section_shows_stats_and_items():
     out = render_omniscient(_bootstrapped_world())
     assert "HP 24, AC 13" in out
+    assert "Gold: 50" in out
     assert "persuasion+2" in out
     assert "`sword`" in out
 

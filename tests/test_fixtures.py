@@ -19,13 +19,14 @@ def test_seed_inn_scene_seeds_full_world():
     assert world.turn == 0
     assert len(world.locations) == 6
     assert len(world.characters) == 5
-    assert len(world.items) == 4
+    assert len(world.items) == 3
     assert len(world.threads) == 3
     assert len(world.events) == 6
     assert len(world.player.log) == 5
     assert world.next_event_t == 6  # 6 events minted at t=0..5
 
     assert world.player.location_id == "inn"
+    assert world.player.gold == 50
     # persuasion +2 lives on the persuasion_skill item's effects
     assert world.items["persuasion_skill"].effects == {"persuasion": 2}
     assert "persuasion_skill" in world.player.items

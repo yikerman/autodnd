@@ -61,6 +61,7 @@ def _build_minimal_world() -> WorldModel:
         player=PlayerState(
             location_id="inn",
             stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2}),
+            gold=50,
             items=["shortsword"],
             log=["You reached the inn at dusk."],
         ),
@@ -164,6 +165,7 @@ def test_loads_worked_example_shaped_payload():
         "player": {
             "location_id": "inn",
             "stats": {"hp": 24, "ac": 13, "mods": {"persuasion": 2}},
+            "gold": 50,
             "items": ["sealed_letter", "persuasion_skill"],
             "log": ["You reached the Crow's Foot Inn at dusk."],
         },
@@ -176,4 +178,5 @@ def test_loads_worked_example_shaped_payload():
     assert world.threads["inn_night"].parent_id == "tensions"
     assert world.player.log[0] == "You reached the Crow's Foot Inn at dusk."
     assert world.items["persuasion_skill"].effects["persuasion"] == 2
+    assert world.player.gold == 50
     assert world.next_event_t == 6

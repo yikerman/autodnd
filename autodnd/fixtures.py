@@ -20,6 +20,7 @@ from autodnd.engine.delta import (
     apply_create_thread,
     apply_mint_event,
     apply_move_player,
+    apply_set_player_gold,
     apply_update_player_stats,
 )
 from autodnd.engine.world import CharacterStats, WorldModel
@@ -140,12 +141,6 @@ _ITEMS: tuple[tuple[str, str, str, dict[str, int]], ...] = (
         "Wax-sealed parchment, addressed to Olwen. Contents: coded Sken troop intelligence (Mara doesn't know).",
         {},
     ),
-    (
-        "gold_pouch",
-        "gold pouch",
-        "Mara's purse. Heavier than she'd like — three weeks' courier wages plus expense money. Contains 50 gp.",
-        {},
-    ),
     ("shortsword", "shortsword", "Plain blade, well-kept.", {}),
     (
         "persuasion_skill",
@@ -207,7 +202,7 @@ _EVENTS: tuple[tuple[str, str, str, list[str], str, str], ...] = (
     ),
 )
 
-_PLAYER_ITEMS = ("sealed_letter", "gold_pouch", "shortsword", "persuasion_skill")
+_PLAYER_ITEMS = ("sealed_letter", "shortsword", "persuasion_skill")
 
 _PLAYER_LOG = (
     "Two summers ago, your father Tomas died in the skirmish at Heavyfall Pass. You wear the loss like a second cloak.",
@@ -271,6 +266,7 @@ def seed_inn_scene(world: WorldModel) -> str:
     _check(
         apply_update_player_stats(world, stats=CharacterStats(hp=24, hp_max=24, ac=13))
     )
+    _check(apply_set_player_gold(world, gold=50))
     for item_id in _PLAYER_ITEMS:
         _check(apply_add_player_item(world, item_id=item_id))
     for entry in _PLAYER_LOG:

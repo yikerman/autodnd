@@ -54,6 +54,7 @@ def _format_player_state(p: PlayerState, items: Mapping[str, Item]) -> str:
     return (
         f"Location: {p.location_id}\n"
         f"HP: {hp_str}, AC: {s.ac}\n"
+        f"Gold: {p.gold}\n"
         f"Abilities: STR {s.strength}, DEX {s.dexterity}, CON {s.constitution}, "
         f"INT {s.intelligence}, WIS {s.wisdom}, CHA {s.charisma}\n"
         f"Base mods: {_format_mods(s.mods)}\n"

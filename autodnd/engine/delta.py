@@ -30,6 +30,8 @@ class ValidationError(BaseModel):
         "unknown_ref",
         "duplicate_id",
         "schema_invalid",
+        "invalid_amount",
+        "insufficient_funds",
     ]
     field_path: str
     detail: str
@@ -224,6 +226,45 @@ def apply_update_player_stats(
     world: WorldModel, *, stats: CharacterStats
 ) -> ValidationError | None:
     world.player.stats = stats
+    return None
+
+
+def apply_set_player_gold(world: WorldModel, *, gold: int) -> ValidationError | None:
+    if gold < 0:
+        return ValidationError(
+            code="invalid_amount",
+            field_path="player.gold",
+            detail=f"Gold cannot be negative: {gold}.",
+        )
+    world.player.gold = gold
+    return None
+
+
+def apply_gain_player_gold(world: WorldModel, *, amount: int) -> ValidationError | None:
+    if amount < 0:
+        return ValidationError(
+            code="invalid_amount",
+            field_path="player.gold",
+            detail=f"Gold gain cannot be negative: {amount}.",
+        )
+    world.player.gold += amount
+    return None
+
+
+def apply_spend_player_gold(world: WorldModel, *, amount: int) -> ValidationError | None:
+    if amount < 0:
+        return ValidationError(
+            code="invalid_amount",
+            field_path="player.gold",
+            detail=f"Gold spend cannot be negative: {amount}.",
+        )
+    if amount > world.player.gold:
+        return ValidationError(
+            code="insufficient_funds",
+            field_path="player.gold",
+            detail=f"Player has {world.player.gold} gold but tried to spend {amount}.",
+        )
+    world.player.gold -= amount
     return None
 
 

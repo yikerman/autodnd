@@ -30,7 +30,7 @@ BANNER = """\
 AutoDND — solo one-shot DM. Type your action, or:
   /hp        — show your HP
   /log       — show recent events
-  /inv       — show inventory
+  /inv       — show inventory and gold
   /ask Q     — free-form sidebar question
   /save FILE — snapshot session to FILE (resume later with --load FILE)
   /help      — this banner
@@ -38,12 +38,9 @@ AutoDND — solo one-shot DM. Type your action, or:
 """
 
 SLASH_FAST_QUERIES = {
-    "/hp": "What's my HP, AC, and ability scores?",
-    "/log": (
-        "List the events I've experienced so far in chronological order, one line each. "
-        "Story timeline only — do NOT include HP, stats, modifiers, location, or inventory."
-    ),
-    "/inv": "What's in my inventory?",
+    "/hp": "Show my HP, AC, ability scores, and modifiers.",
+    "/log": "Show my story log in chronological order.",
+    "/inv": "Show my inventory and gold.",
 }
 
 
@@ -114,7 +111,7 @@ def handle_slash(line: str, world: WorldModel) -> str:
                 world_turn=world.turn,
             )
         case "/ask":
-            query = rest.strip() or "What's my current status?"
+            query = rest.strip() or "Show my current status."
             return run_sidebar(
                 world.player, query, items=world.items, world_turn=world.turn
             )

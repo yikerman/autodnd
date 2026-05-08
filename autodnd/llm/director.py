@@ -22,10 +22,12 @@ from autodnd.engine.delta import (
     apply_create_item,
     apply_create_location,
     apply_create_thread,
+    apply_gain_player_gold,
     apply_mint_event,
     apply_move_character,
     apply_move_player,
     apply_remove_player_item,
+    apply_spend_player_gold,
     apply_update_character_stats,
     apply_update_item_description,
     apply_update_player_stats,
@@ -69,13 +71,12 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
 
     @agent.tool
     def roll_dice(ctx: RunContext[DirectorDeps], spec: str) -> int:
-        """Roll a dice expression like `2d6+3` or `d20`; returns the sum."""
+        """Roll a dice expression like `2d6+3` or `d20`."""
         return roll(spec, ctx.deps.rng)
 
     @agent.tool
     def check(ctx: RunContext[DirectorDeps], skill: str, dc: int) -> Resolution:
-        """Resolve a skill check: d20 + bonus vs `dc`. Bonus = `stats.mods[skill]`
-        + carried items' `effects[skill]`."""
+        """Resolve a skill check against a DC using player mods and item effects."""
         world = ctx.deps.world
         mods = effective_mods(world.player.stats, world.player.items, world.items)
         return resolve_check(skill, dc, mods, ctx.deps.rng)
@@ -84,13 +85,12 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def attack(
         ctx: RunContext[DirectorDeps], attack_mod: int, target_ac: int
     ) -> Resolution:
-        """Resolve an attack roll: d20 + `attack_mod` vs `target_ac`."""
+        """Resolve an attack roll against target AC."""
         return resolve_attack(attack_mod, target_ac, ctx.deps.rng)
 
     @agent.tool
     def save(ctx: RunContext[DirectorDeps], save_kind: str, dc: int) -> Resolution:
-        """Resolve a saving throw: d20 + bonus vs `dc`. Bonus = `stats.mods[save_kind]`
-        + carried items' `effects[save_kind]`."""
+        """Resolve a saving throw against a DC using player mods and item effects."""
         world = ctx.deps.world
         mods = effective_mods(world.player.stats, world.player.items, world.items)
         return resolve_save(save_kind, dc, mods, ctx.deps.rng)
@@ -101,7 +101,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def create_location(
         ctx: RunContext[DirectorDeps], id: str, name: str, description: str
     ) -> str:
-        """Mint a `Location`."""
+        """Mint a location the session can reference."""
         return _ok_or_err(
             apply_create_location(
                 ctx.deps.world, id=id, name=name, description=description
@@ -117,8 +117,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         location_id: str,
         stats: CharacterStats,
     ) -> str:
-        """Mint an NPC. The player is not a `Character`; use the `*_player`
-        tools for the player."""
+        """Mint an NPC at a known location. Player state uses player tools."""
         return _ok_or_err(
             apply_create_character(
                 ctx.deps.world,
@@ -138,9 +137,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         description: str,
         effects: dict[str, int],
     ) -> str:
-        """Mint an `Item`. `effects` carries mechanics: `{"persuasion": 2}` for
-        a +2 training, `{"attack": 1}` for a +1 sword, `{}` for flavor-only.
-        `description` carries flavor and quantity."""
+        """Mint an item. Effects are mechanical bonuses; description is fictional state."""
         return _ok_or_err(
             apply_create_item(
                 ctx.deps.world,
@@ -159,7 +156,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         parent_id: str | None,
         description: str,
     ) -> str:
-        """Mint a `Thread`. Pass `parent_id=None` for a root thread."""
+        """Mint a plot thread. Use `parent_id=None` for a root thread."""
         return _ok_or_err(
             apply_create_thread(
                 ctx.deps.world,
@@ -180,9 +177,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         description: str,
         thread_id: str,
     ) -> str:
-        """Mint an immutable `Event`. Engine assigns `t`. Pass `participants=[]`
-        for events with no character witnesses (backstory, weather, pure
-        narration)."""
+        """Mint a canonical event. Use for history, discoveries, consequences, or notable changes."""
         return _ok_or_err(
             apply_mint_event(
                 ctx.deps.world,
@@ -201,7 +196,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_thread_description(
         ctx: RunContext[DirectorDeps], id: str, description: str
     ) -> str:
-        """Replace a thread's description; use when the arc has evolved."""
+        """Update a thread after its truth, pressure, or stakes change."""
         return _ok_or_err(
             apply_update_thread_description(
                 ctx.deps.world, id=id, description=description
@@ -212,10 +207,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_item_description(
         ctx: RunContext[DirectorDeps], id: str, description: str
     ) -> str:
-        """Replace an item's description. The description is where quantity and
-        condition live (coin in a pouch, charges, durability), so update it
-        whenever prose implies any of those changed — otherwise next turn's
-        render will contradict you."""
+        """Update an item's fictional state, condition, charges, or non-gold quantity."""
         return _ok_or_err(
             apply_update_item_description(
                 ctx.deps.world, id=id, description=description
@@ -224,7 +216,7 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
 
     @agent.tool
     def move_character(ctx: RunContext[DirectorDeps], id: str, location_id: str) -> str:
-        """Move an NPC to a new location."""
+        """Move an NPC to a known location."""
         return _ok_or_err(
             apply_move_character(ctx.deps.world, id=id, location_id=location_id)
         )
@@ -233,35 +225,41 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
     def update_character_stats(
         ctx: RunContext[DirectorDeps], id: str, stats: CharacterStats
     ) -> str:
-        """Replace an NPC's stats wholesale. Use whenever prose implies their
-        HP, AC, or condition changed."""
+        """Update an NPC's HP, AC, abilities, or mods."""
         return _ok_or_err(
             apply_update_character_stats(ctx.deps.world, id=id, stats=stats)
         )
 
     @agent.tool
     def move_player(ctx: RunContext[DirectorDeps], location_id: str) -> str:
-        """Move the player to a new location."""
+        """Move the player to a known location."""
         return _ok_or_err(apply_move_player(ctx.deps.world, location_id=location_id))
 
     @agent.tool
     def update_player_stats(
         ctx: RunContext[DirectorDeps], stats: CharacterStats
     ) -> str:
-        """Replace the player's stats wholesale. Use whenever prose implies the
-        player's HP, AC, or ability scores changed."""
+        """Update player HP, AC, abilities, and mods."""
         return _ok_or_err(apply_update_player_stats(ctx.deps.world, stats=stats))
 
     @agent.tool
+    def gain_player_gold(ctx: RunContext[DirectorDeps], amount: int) -> str:
+        """Increase the player's gold after payment, treasure, reward, or refund."""
+        return _ok_or_err(apply_gain_player_gold(ctx.deps.world, amount=amount))
+
+    @agent.tool
+    def spend_player_gold(ctx: RunContext[DirectorDeps], amount: int) -> str:
+        """Spend player gold for purchases, bribes, fees, losses, or wagers."""
+        return _ok_or_err(apply_spend_player_gold(ctx.deps.world, amount=amount))
+
+    @agent.tool
     def add_player_item(ctx: RunContext[DirectorDeps], item_id: str) -> str:
-        """Give the player an item (must already exist via `create_item`). Use
-        whenever prose implies the player picked up or received it."""
+        """Add an existing item to the player's inventory."""
         return _ok_or_err(apply_add_player_item(ctx.deps.world, item_id=item_id))
 
     @agent.tool
     def remove_player_item(ctx: RunContext[DirectorDeps], item_id: str) -> str:
-        """Take an item from the player (they must currently be carrying it).
-        Use whenever prose implies the player gave it away, dropped, or lost it."""
+        """Remove an item from the player's inventory."""
         return _ok_or_err(apply_remove_player_item(ctx.deps.world, item_id=item_id))
 
     return agent
@@ -276,12 +274,12 @@ def turn_user_message(
     if prior_prose:
         prose_section = "\n\n---\n\n".join(prior_prose)
     else:
-        prose_section = "(none — this is the first turn after the opening.)"
+        prose_section = "(none)"
     return (
         f"{render_omniscient(world)}\n\n"
-        "## Prior prose (oldest first)\n\n"
+        "## Prior player-facing prose\n\n"
         f"{prose_section}\n\n"
-        "## Player input\n\n"
+        "## Player action\n\n"
         f"{player_input}"
     )
 

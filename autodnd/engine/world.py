@@ -74,6 +74,7 @@ class Thread(BaseModel):
 class PlayerState(BaseModel):
     location_id: str
     stats: CharacterStats
+    gold: int = 0
     items: list[str] = Field(default_factory=list)
     log: list[str] = Field(
         default_factory=list

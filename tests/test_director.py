@@ -157,11 +157,11 @@ def test_turn_user_message_includes_world_render_and_input():
     assert "I look around." in msg
     assert "You stand at the door." in msg
     assert "The door creaks open." in msg
-    assert "## Prior prose (oldest first)" in msg
-    assert "## Player input" in msg
+    assert "## Prior player-facing prose" in msg
+    assert "## Player action" in msg
 
 
 def test_turn_user_message_handles_empty_prior_prose():
     world = _seeded_world()
     msg = turn_user_message(world, "go.", [])
-    assert "(none — this is the first turn after the opening.)" in msg
+    assert "(none)" in msg

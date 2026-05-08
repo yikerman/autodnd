@@ -131,6 +131,7 @@ def render_omniscient(world: WorldModel) -> str:
     eff = effective_mods(p.stats, p.items, world.items)
     lines.append(f"Location: {p_loc_name} (id=`{p.location_id}`)")
     lines.append(f"Stats: {_format_stats(p.stats)}")
+    lines.append(f"Gold: {p.gold}")
     lines.append(f"Effective mods (stats + carried items): {_format_mods(eff)}")
     items_str = ", ".join(f"`{i}`" for i in p.items) if p.items else "—"
     lines.append(f"Items: {items_str}")

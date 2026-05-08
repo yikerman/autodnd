@@ -13,6 +13,9 @@ from autodnd.engine.delta import (
     apply_move_character,
     apply_move_player,
     apply_remove_player_item,
+    apply_gain_player_gold,
+    apply_set_player_gold,
+    apply_spend_player_gold,
     apply_update_character_stats,
     apply_update_item_description,
     apply_update_player_stats,
@@ -363,6 +366,63 @@ def test_update_player_stats():
     err = apply_update_player_stats(world, stats=CharacterStats(hp=10, ac=13))
     assert err is None
     assert world.player.stats.hp == 10
+
+
+def test_set_player_gold():
+    world = _seeded_world()
+    err = apply_set_player_gold(world, gold=12)
+    assert err is None
+    assert world.player.gold == 12
+
+
+def test_set_player_gold_rejects_negative():
+    world = _seeded_world()
+    err = apply_set_player_gold(world, gold=-1)
+    assert err is not None
+    assert err.code == "invalid_amount"
+    assert world.player.gold == 0
+
+
+def test_gain_player_gold():
+    world = _seeded_world()
+    apply_set_player_gold(world, gold=3)
+    err = apply_gain_player_gold(world, amount=7)
+    assert err is None
+    assert world.player.gold == 10
+
+
+def test_gain_player_gold_rejects_negative():
+    world = _seeded_world()
+    err = apply_gain_player_gold(world, amount=-1)
+    assert err is not None
+    assert err.code == "invalid_amount"
+    assert world.player.gold == 0
+
+
+def test_spend_player_gold():
+    world = _seeded_world()
+    apply_set_player_gold(world, gold=10)
+    err = apply_spend_player_gold(world, amount=4)
+    assert err is None
+    assert world.player.gold == 6
+
+
+def test_spend_player_gold_rejects_negative():
+    world = _seeded_world()
+    apply_set_player_gold(world, gold=10)
+    err = apply_spend_player_gold(world, amount=-1)
+    assert err is not None
+    assert err.code == "invalid_amount"
+    assert world.player.gold == 10
+
+
+def test_spend_player_gold_rejects_insufficient_funds():
+    world = _seeded_world()
+    apply_set_player_gold(world, gold=3)
+    err = apply_spend_player_gold(world, amount=4)
+    assert err is not None
+    assert err.code == "insufficient_funds"
+    assert world.player.gold == 3
 
 
 def test_add_player_item():
