@@ -62,9 +62,7 @@ def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str]:
     history: list[ModelMessage] = []
     user_msg = bootstrap_user_message()
     while True:
-        prose, history = run_bootstrapper(
-            world, user_msg, message_history=history
-        )
+        prose, history = run_bootstrapper(world, user_msg, message_history=history)
         _print_block(prose, kind="prose")
         if world.turn == 0:
             return world, prose

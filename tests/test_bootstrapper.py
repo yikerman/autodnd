@@ -103,9 +103,7 @@ def test_begin_play_succeeds_after_seeding():
                     args={"stats": {"hp": 12, "hp_max": 12, "ac": 13}},
                     tool_call_id="c5",
                 ),
-                ToolCallPart(
-                    tool_name="begin_play", args={}, tool_call_id="c6"
-                ),
+                ToolCallPart(tool_name="begin_play", args={}, tool_call_id="c6"),
             ]
         ),
         ModelResponse(parts=[TextPart("You stand in the inn, dusk light fading.")]),
@@ -117,9 +115,7 @@ def test_begin_play_succeeds_after_seeding():
         step["n"] += 1
         return resp
 
-    prose, history = run_bootstrapper(
-        world, "test", model=FunctionModel(model_fn)
-    )
+    prose, history = run_bootstrapper(world, "test", model=FunctionModel(model_fn))
 
     assert world.turn == 0
     assert "inn" in world.locations
@@ -141,9 +137,7 @@ def test_run_bootstrapper_threads_message_history():
         seen_history_lengths.append(len(messages))
         return ModelResponse(parts=[TextPart("ack")])
 
-    _, history1 = run_bootstrapper(
-        world, "first", model=FunctionModel(model_fn)
-    )
+    _, history1 = run_bootstrapper(world, "first", model=FunctionModel(model_fn))
     _, history2 = run_bootstrapper(
         world, "second", model=FunctionModel(model_fn), message_history=history1
     )
@@ -151,5 +145,3 @@ def test_run_bootstrapper_threads_message_history():
     # Second call sees more messages than the first (history threaded in).
     assert seen_history_lengths[0] < seen_history_lengths[1]
     assert len(history2) > len(history1)
-
-

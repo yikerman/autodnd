@@ -30,7 +30,11 @@ def test_print_block_uses_kind_style():
 def test_print_block_preserves_banner_line_breaks():
     buf = StringIO()
 
-    print_block("AutoDND\n  /hp        — show your HP\n  /quit      — exit\n", kind="banner", file=buf)
+    print_block(
+        "AutoDND\n  /hp        — show your HP\n  /quit      — exit\n",
+        kind="banner",
+        file=buf,
+    )
 
     out = buf.getvalue()
     assert "AutoDND\n  /hp        — show your HP\n  /quit      — exit" in out

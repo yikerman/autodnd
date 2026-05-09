@@ -152,9 +152,7 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
     # ---------- Player setup ----------
 
     @agent.tool
-    def move_player(
-        ctx: RunContext[BootstrapperDeps], location_id: str
-    ) -> str:
+    def move_player(ctx: RunContext[BootstrapperDeps], location_id: str) -> str:
         """Place the player at a known location."""
         return _ok_or_err(apply_move_player(ctx.deps.world, location_id=location_id))
 

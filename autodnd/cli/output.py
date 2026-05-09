@@ -56,7 +56,7 @@ def read_input() -> str | None:
     prompt = _readline_prompt()
     try:
         line = input(prompt)
-    except (EOFError, KeyboardInterrupt):
+    except EOFError, KeyboardInterrupt:
         sys.stdout.write(f"{_RESET}\n")
         sys.stdout.flush()
         return None

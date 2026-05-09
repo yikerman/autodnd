@@ -41,6 +41,8 @@ When improving prompts or agent behavior, favor structural support over longer
 instructions. A validator, typed tool, narrower state model, or clearer boundary
 usually beats another paragraph of prompt text.
 
+Use `uv` for Python environment, dependency, and test commands.
+
 ## Prompt Writing
 
 Prompts should be short, dense, and opinionated. They should describe the

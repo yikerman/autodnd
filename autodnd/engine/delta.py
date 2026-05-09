@@ -251,7 +251,9 @@ def apply_gain_player_gold(world: WorldModel, *, amount: int) -> ValidationError
     return None
 
 
-def apply_spend_player_gold(world: WorldModel, *, amount: int) -> ValidationError | None:
+def apply_spend_player_gold(
+    world: WorldModel, *, amount: int
+) -> ValidationError | None:
     if amount < 0:
         return ValidationError(
             code="invalid_amount",
