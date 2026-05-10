@@ -129,6 +129,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="resume a session previously written by /save",
     )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="write a human-readable agent trace to trace/<timestamp>.log",
+    )
     return parser.parse_args(argv)
 
 
@@ -151,7 +156,7 @@ def main() -> None:
     args = parse_args()
     rng = random.Random()
 
-    trace_path = tracing.init()
+    trace_path = tracing.init() if args.trace else None
 
     _print_block(BANNER, kind="banner")
     if trace_path:

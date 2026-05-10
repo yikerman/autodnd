@@ -33,7 +33,7 @@ from autodnd.engine.delta import (
 )
 from autodnd.engine.world import CharacterStats, WorldModel
 from autodnd.llm import load_prompt, model_from_env
-from autodnd.llm.tracing import log_agent_call
+from autodnd.llm.tracing import end_run, start_run
 
 
 @dataclass
@@ -240,8 +240,10 @@ def run_bootstrapper(
     agent = build_bootstrapper(model)
     deps = BootstrapperDeps(world=world)
     start = time.monotonic()
+    step = start_run(agent="bootstrapper", world_turn=world.turn)
     result = agent.run_sync(user_message, deps=deps, message_history=message_history)
-    log_agent_call(
+    end_run(
+        step=step,
         agent="bootstrapper",
         world_turn=world.turn,
         result=result,

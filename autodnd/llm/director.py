@@ -45,7 +45,7 @@ from autodnd.engine.rules import (
 )
 from autodnd.engine.world import CharacterStats, WorldModel
 from autodnd.llm import load_prompt, model_from_env
-from autodnd.llm.tracing import log_agent_call
+from autodnd.llm.tracing import end_run, start_run
 
 
 @dataclass
@@ -314,8 +314,10 @@ def run_director(
     agent = build_director(model)
     deps = DirectorDeps(world=world, rng=rng)
     start = time.monotonic()
+    step = start_run(agent="director", world_turn=world.turn)
     result = agent.run_sync(user_message, deps=deps)
-    log_agent_call(
+    end_run(
+        step=step,
         agent="director",
         world_turn=world.turn,
         result=result,

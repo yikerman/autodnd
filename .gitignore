@@ -16,4 +16,4 @@ test.json
 .env
 
 # Per-session LLM trace logs
-traces/
+trace/

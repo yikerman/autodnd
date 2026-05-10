@@ -13,7 +13,7 @@ from pydantic_ai.models import Model
 from autodnd.engine.rules import effective_mods
 from autodnd.engine.world import Item, PlayerState
 from autodnd.llm import load_prompt, model_from_env
-from autodnd.llm.tracing import log_agent_call
+from autodnd.llm.tracing import end_run, start_run
 
 
 def build_sidebar(model: Model | None = None) -> Agent[None, str]:
@@ -78,12 +78,13 @@ def run_sidebar(
         f"## Question\n\n{query}"
     )
     start = time.monotonic()
+    step = start_run(agent="sidebar", world_turn=world_turn, extra={"query": query})
     result = agent.run_sync(user_message)
-    log_agent_call(
+    end_run(
+        step=step,
         agent="sidebar",
         world_turn=world_turn,
         result=result,
         latency_ms=(time.monotonic() - start) * 1000,
-        extra={"query": query},
     )
     return result.output
