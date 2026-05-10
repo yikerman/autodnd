@@ -323,18 +323,15 @@ def run_director(
         result=result,
         latency_ms=(time.monotonic() - start) * 1000,
     )
-    # Keep only text parts from the final ModelResponse. Prompt instructs the
-    # Director to emit one prose block at the end after all tool calls; if the
-    # model drafts prose mid-run and rewrites it, the final response is the
-    # canonical one.
-    final_response: ModelResponse | None = None
+    # Concatenate every non-empty TextPart from every ModelResponse, in order.
+    # When the model writes one scene, makes a tool call (e.g., a time skip),
+    # and writes another scene, both reach the player. The prompt is what
+    # discourages drafts-and-rewrites; we don't try to detect them here.
+    chunks: list[str] = []
     for msg in result.all_messages():
-        if isinstance(msg, ModelResponse):
-            final_response = msg
-    if final_response is None:
-        return ""
-    return "\n\n".join(
-        part.content
-        for part in final_response.parts
-        if isinstance(part, TextPart) and part.content
-    )
+        if not isinstance(msg, ModelResponse):
+            continue
+        for part in msg.parts:
+            if isinstance(part, TextPart) and part.content.strip():
+                chunks.append(part.content)
+    return "\n\n".join(chunks)

@@ -30,4 +30,8 @@ The world moves whether the player looks or not. Each turn:
 
 ## Style
 
-Write one final prose block after tool calls. Keep ordinary turns to one or two paragraphs; use more room for combat, travel, or scene transitions. End on a clear response point when the situation calls for player choice.
+One scene per turn. End at the next decision point. Time skips (rest, travel, waiting) belong inside that one scene — narrate up to and through the skip into the new moment, don't open a fresh scene afterward, or the player loses the chance to react.
+
+Write the prose once. Don't draft, then rewrite — every prose block you emit reaches the player in display order, so a rewrite stacks under the draft instead of replacing it.
+
+Keep ordinary turns to one or two paragraphs; use more room for combat, travel, or scene transitions. End on a clear response point when the situation calls for player choice.

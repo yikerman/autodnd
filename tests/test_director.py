@@ -112,11 +112,11 @@ def test_director_receives_validation_error_inline():
     assert any("error" in r and "phantom" in r for r in seen_returns), seen_returns
 
 
-def test_run_director_keeps_only_final_prose_block():
-    """The Director is prompted to emit prose once, at the end. If the model
-    drafts a complete narrative early and then writes another after more tool
-    calls, only the final block is shown to the player — otherwise the player
-    sees stacked, near-duplicate turn endings."""
+def test_run_director_concatenates_text_across_responses():
+    """When the model emits prose, makes tool calls (e.g. a time skip), and
+    emits more prose, both blocks reach the player in order. The original bug
+    was the CLI keeping only the final block — so a player saying 'I rest'
+    saw the wake-up scene but lost the going-to-bed scene."""
     world = _seeded_world()
 
     step = {"n": 0}
@@ -126,24 +126,50 @@ def test_run_director_keeps_only_final_prose_block():
         if step["n"] == 1:
             return ModelResponse(
                 parts=[
-                    TextPart("Draft block. **What do you do?**"),
+                    TextPart("Scene A."),
                     ToolCallPart(
-                        tool_name="move_player",
-                        args={"location_id": "inn"},
-                        tool_call_id="call_1",
+                        tool_name="advance_narrative_time",
+                        args={"to": "Day 2, dawn"},
+                        tool_call_id="t1",
                     ),
                 ]
             )
-        return ModelResponse(parts=[TextPart("Final block. **What do you do?**")])
+        return ModelResponse(parts=[TextPart("Scene B.")])
 
     output = run_director(
-        world,
-        "test",
-        random.Random(42),
-        model=FunctionModel(model_fn),
+        world, "test", random.Random(42), model=FunctionModel(model_fn)
     )
 
-    assert output == "Final block. **What do you do?**"
+    assert output == "Scene A.\n\nScene B."
+
+
+def test_run_director_skips_empty_text_parts():
+    """Whitespace-only TextParts shouldn't add blank lines to the output."""
+    world = _seeded_world()
+
+    step = {"n": 0}
+
+    def model_fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        step["n"] += 1
+        if step["n"] == 1:
+            return ModelResponse(
+                parts=[
+                    TextPart(""),
+                    TextPart("   "),
+                    ToolCallPart(
+                        tool_name="move_player",
+                        args={"location_id": "inn"},
+                        tool_call_id="t1",
+                    ),
+                ]
+            )
+        return ModelResponse(parts=[TextPart("Real prose.")])
+
+    output = run_director(
+        world, "test", random.Random(42), model=FunctionModel(model_fn)
+    )
+
+    assert output == "Real prose."
 
 
 def test_turn_user_message_includes_world_render_and_input():
