@@ -18,6 +18,7 @@ from pydantic_ai.models import Model
 from autodnd.engine.delta import (
     ValidationError,
     apply_add_player_item,
+    apply_advance_narrative_time,
     apply_create_character,
     apply_create_item,
     apply_create_location,
@@ -262,6 +263,14 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
         """Remove an item from the player's inventory."""
         return _ok_or_err(apply_remove_player_item(ctx.deps.world, item_id=item_id))
 
+    # ---------- World clock ----------
+
+    @agent.tool
+    def advance_narrative_time(ctx: RunContext[DirectorDeps], to: str) -> str:
+        """Set the world clock to `to` (free-text fictional time, e.g. 'Day 3, dusk').
+        Call when the prose advances fictional time meaningfully."""
+        return _ok_or_err(apply_advance_narrative_time(ctx.deps.world, to=to))
+
     return agent
 
 
@@ -269,10 +278,17 @@ def build_director(model: Model | None = None) -> Agent[DirectorDeps, str]:
 
 
 def turn_user_message(
-    world: WorldModel, player_input: str, prior_prose: list[str]
+    world: WorldModel,
+    player_input: str,
+    prior_prose: list[str],
+    player_prompts: list[str],
 ) -> str:
     if prior_prose:
-        prose_section = "\n\n---\n\n".join(prior_prose)
+        turns = [
+            f"[PLAYER PROMPT: {prompt}]\n\n{prose}"
+            for prompt, prose in zip(player_prompts, prior_prose)
+        ]
+        prose_section = "\n\n---\n\n".join(turns)
     else:
         prose_section = "(none)"
     return (

@@ -13,6 +13,14 @@ Write in second person from the player character's perspective. Use the omniscie
 - Treat prior prose as soft memory. Canonize details that still matter, and let current canon resolve contradictions.
 - Keep hidden canon in canon. Player prose reveals evidence, not private truth.
 
+## Pacing
+
+The world moves whether the player looks or not. Each turn:
+
+- Update the world clock with `advance_narrative_time` to reflect the fictional time that just passed (minutes of dialogue, an hour of travel, a night of sleep). Turns are not time; the prose is.
+- Compare the new clock against each thread's last-event time. For threads whose description implies pressure or a deadline, judge whether the elapsed time should have moved them. When it should, mint an off-screen event (`participants=[]`) reflecting NPC, faction, or environmental action and update the thread description.
+- Surface off-screen progress only through what the character can perceive: rumor, evidence, an absent NPC, a changed scene.
+
 ## Schema Boundaries
 
 - Events, Locations, Characters, and Item id/name/effects are append-only once created.

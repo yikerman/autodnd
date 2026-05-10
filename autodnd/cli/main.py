@@ -80,11 +80,12 @@ def run_turn(
     world: WorldModel,
     player_input: str,
     prior_prose: list[str],
+    player_prompts: list[str],
     rng: random.Random,
 ) -> str:
     prose = run_director(
         world,
-        turn_user_message(world, player_input, prior_prose),
+        turn_user_message(world, player_input, prior_prose, player_prompts),
         rng,
     )
     world.turn += 1
@@ -159,13 +160,16 @@ def main() -> None:
     if args.load is not None:
         print_status(f"Loading session from {args.load}…")
         snap = load_session(args.load)
-        world, prior_prose = snap.world, snap.prior_prose
+        world = snap.world
+        prior_prose = snap.prior_prose
+        player_prompts = snap.player_prompts
         if prior_prose:
             _print_block(prior_prose[-1], kind="prose")
     else:
         print_status("Initializing world…")
         world, opening_prose = initialize_session(demo_scene=args.demo_scene)
         prior_prose = [opening_prose]
+        player_prompts = ["<none, scene initialized>"]
         # Demo path prints opening here. LLM path's bootstrapper loop already
         # printed each turn (including the opening), so suppress duplicate.
         if args.demo_scene:
@@ -190,6 +194,7 @@ def main() -> None:
                         path,
                         world=world,
                         prior_prose=prior_prose,
+                        player_prompts=player_prompts,
                     )
                 except OSError as e:
                     _print_block(f"Save failed: {e}", kind="error")
@@ -204,7 +209,7 @@ def main() -> None:
                 kind = "banner" if line == "/help" else "sidebar"
                 _print_block(output, kind=kind)
             else:
-                output = run_turn(world, line, prior_prose, rng)
+                output = run_turn(world, line, prior_prose, player_prompts, rng)
                 if _is_status_message(output):
                     _print_block(
                         output,
@@ -212,6 +217,7 @@ def main() -> None:
                     )
                 else:
                     prior_prose.append(output)
+                    player_prompts.append(line)
                     _print_block(output, kind="prose")
         except SystemExit:
             return

@@ -13,6 +13,7 @@ and returns the opening prose ready for printing.
 from autodnd.engine.delta import (
     ValidationError,
     apply_add_player_item,
+    apply_advance_narrative_time,
     apply_append_player_log,
     apply_create_character,
     apply_create_item,
@@ -271,6 +272,7 @@ def seed_inn_scene(world: WorldModel) -> str:
         _check(apply_add_player_item(world, item_id=item_id))
     for entry in _PLAYER_LOG:
         _check(apply_append_player_log(world, text=entry))
+    _check(apply_advance_narrative_time(world, to="today, dusk"))
 
     world.turn = 0
     return _OPENING_PROSE

@@ -90,6 +90,16 @@ def test_next_event_t_defaults_to_zero():
     assert world.next_event_t == 0
 
 
+def test_narrative_time_defaults_to_empty():
+    """Fresh WorldModel has no fictional clock until set; empty string is the
+    'unset' sentinel that the render shows as '(unset)'."""
+    world = WorldModel(
+        player=PlayerState(location_id="", stats=CharacterStats(hp=0, ac=0)),
+        turn=-1,
+    )
+    assert world.narrative_time == ""
+
+
 def test_loads_worked_example_shaped_payload():
     """Stripped-down bootstrap JSON exercising every field a bootstrapped world
     would land in after the Director's tool calls."""

@@ -4,6 +4,7 @@ import pytest
 
 from autodnd.engine.delta import (
     apply_add_player_item,
+    apply_advance_narrative_time,
     apply_append_player_log,
     apply_create_character,
     apply_create_item,
@@ -466,6 +467,22 @@ def test_append_player_log():
     err = apply_append_player_log(world, text="You arrived.")
     assert err is None
     assert world.player.log == ["You arrived."]
+
+
+def test_advance_narrative_time_sets_world_clock():
+    world = _empty_world()
+    assert world.narrative_time == ""
+    err = apply_advance_narrative_time(world, to="Day 3, dusk")
+    assert err is None
+    assert world.narrative_time == "Day 3, dusk"
+
+
+def test_advance_narrative_time_rejects_empty():
+    world = _empty_world()
+    err = apply_advance_narrative_time(world, to="   ")
+    assert err is not None
+    assert err.code == "schema_invalid"
+    assert world.narrative_time == ""
 
 
 # ---------- Sequencing: create-then-reference within a turn ----------

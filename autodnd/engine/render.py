@@ -43,6 +43,8 @@ def render_omniscient(world: WorldModel) -> str:
     lines: list[str] = [
         f"# World (turn {world.turn})",
         "",
+        f"Now: {world.narrative_time or '(unset)'}",
+        "",
         "## Threads",
         "",
     ]
@@ -54,6 +56,7 @@ def render_omniscient(world: WorldModel) -> str:
         lines.append("")
         events = events_of_thread.get(thread.id, [])
         if events:
+            lines.append(f"Last event: {events[-1].narrative_time}")
             lines.append("Events:")
             for ev in events:
                 loc_name = name_of_loc.get(ev.location_id, ev.location_id)

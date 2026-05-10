@@ -7,6 +7,7 @@ log timeline rendered).
 
 from autodnd.engine.delta import (
     apply_add_player_item,
+    apply_advance_narrative_time,
     apply_append_player_log,
     apply_create_character,
     apply_create_item,
@@ -89,6 +90,7 @@ def _bootstrapped_world() -> WorldModel:
     apply_add_player_item(world, item_id="sword")
     apply_append_player_log(world, text="You reached the inn at dusk.")
     apply_append_player_log(world, text="You assume the kingdom is at peace.")
+    apply_advance_narrative_time(world, to="today, dusk")
     world.turn = 0
     return world
 
@@ -144,6 +146,34 @@ def test_render_empty_world():
     assert "# World (turn -1)" in out
     assert "(no threads)" in out
     assert "(none)" in out  # locations / characters / items / player.log
+
+
+def test_render_shows_world_clock_when_set():
+    out = render_omniscient(_bootstrapped_world())
+    assert "Now: today, dusk" in out
+
+
+def test_render_shows_unset_clock_on_empty_world():
+    out = render_omniscient(_empty_world())
+    assert "Now: (unset)" in out
+
+
+def test_render_shows_last_event_per_thread_with_events():
+    out = render_omniscient(_bootstrapped_world())
+    # Thread `inn_night` has one event at "today, dusk".
+    assert "Last event: today, dusk" in out
+
+
+def test_render_omits_last_event_for_threads_without_events():
+    """A thread with no events should not produce a 'Last event:' line."""
+    world = _empty_world()
+    apply_create_thread(
+        world, id="quiet", name="Quiet", parent_id=None, description="Nothing yet."
+    )
+    out = render_omniscient(world)
+    # The thread renders, but no "Last event:" line for it.
+    assert "`quiet`" in out
+    assert "Last event:" not in out
 
 
 def test_render_is_deterministic():

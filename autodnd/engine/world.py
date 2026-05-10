@@ -90,3 +90,4 @@ class WorldModel(BaseModel):
     player: PlayerState
     turn: int
     next_event_t: int = 0  # engine-managed; mint_event reads + increments
+    narrative_time: str = ""  # e.g. "Day 1, dusk". Director-maintained "now."

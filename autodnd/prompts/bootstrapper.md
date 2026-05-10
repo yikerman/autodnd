@@ -46,4 +46,4 @@ Hidden lore belongs in canon first. The opening should show only what the charac
 
 ## Handoff
 
-Call `begin_play` once the world is rich enough to run. On success, write one 2nd-person opening prose block grounded in canon. End on a decision point, sensory disturbance, or NPC line that demands a response.
+Call `advance_narrative_time` to set the opening fictional time (e.g. "Day 1, dusk") and `begin_play` once the world is rich enough to run. On success, write one 2nd-person opening prose block grounded in canon. End on a decision point, sensory disturbance, or NPC line that demands a response.

@@ -301,3 +301,17 @@ def apply_append_player_log(world: WorldModel, *, text: str) -> ValidationError 
     """Append an NL log entry. Cannot fail."""
     world.player.log.append(text)
     return None
+
+
+def apply_advance_narrative_time(
+    world: WorldModel, *, to: str
+) -> ValidationError | None:
+    """Set the world's fictional clock. Free-text, e.g. 'Day 3, dusk'."""
+    if not to.strip():
+        return ValidationError(
+            code="schema_invalid",
+            field_path="world.narrative_time",
+            detail="narrative_time cannot be empty.",
+        )
+    world.narrative_time = to
+    return None

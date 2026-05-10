@@ -152,6 +152,7 @@ def test_turn_user_message_includes_world_render_and_input():
         world,
         "I look around.",
         ["You stand at the door.", "The door creaks open."],
+        ["", "open the door"],
     )
     assert "# World (turn 0)" in msg  # render_omniscient header
     assert "I look around." in msg
@@ -161,7 +162,48 @@ def test_turn_user_message_includes_world_render_and_input():
     assert "## Player action" in msg
 
 
+def test_turn_user_message_interleaves_prompts_and_prose():
+    world = _seeded_world()
+    msg = turn_user_message(
+        world,
+        "I look around.",
+        ["You stand at the door.", "The door creaks open."],
+        ["", "open the door"],
+    )
+    assert "[PLAYER PROMPT: ]\n\nYou stand at the door." in msg
+    assert "[PLAYER PROMPT: open the door]\n\nThe door creaks open." in msg
+
+
 def test_turn_user_message_handles_empty_prior_prose():
     world = _seeded_world()
-    msg = turn_user_message(world, "go.", [])
+    msg = turn_user_message(world, "go.", [], [])
     assert "(none)" in msg
+
+
+def test_director_can_advance_narrative_time():
+    """Director's advance_narrative_time tool sets world.narrative_time."""
+    world = _seeded_world()
+    assert world.narrative_time == ""
+
+    step = {"n": 0}
+
+    def model_fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        step["n"] += 1
+        if step["n"] == 1:
+            return ModelResponse(
+                parts=[
+                    ToolCallPart(
+                        tool_name="advance_narrative_time",
+                        args={"to": "Day 2, dawn"},
+                        tool_call_id="call_1",
+                    )
+                ]
+            )
+        return ModelResponse(parts=[TextPart("The sun rises.")])
+
+    agent = build_director(model=FunctionModel(model_fn))
+    deps = DirectorDeps(world=world, rng=random.Random(42))
+    result = agent.run_sync("test", deps=deps)
+
+    assert result.output == "The sun rises."
+    assert world.narrative_time == "Day 2, dawn"

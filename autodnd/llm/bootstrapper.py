@@ -20,6 +20,7 @@ from pydantic_ai.models import Model
 from autodnd.engine.delta import (
     ValidationError,
     apply_add_player_item,
+    apply_advance_narrative_time,
     apply_append_player_log,
     apply_create_character,
     apply_create_item,
@@ -178,12 +179,18 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
         """Append player-facing memory, belief, rumor, or assumption."""
         return _ok_or_err(apply_append_player_log(ctx.deps.world, text=text))
 
+    @agent.tool
+    def advance_narrative_time(ctx: RunContext[BootstrapperDeps], to: str) -> str:
+        """Set the opening fictional time (free-text, e.g. 'Day 1, dusk'). Required
+        before begin_play so the Director has a clock to advance."""
+        return _ok_or_err(apply_advance_narrative_time(ctx.deps.world, to=to))
+
     # ---------- Handoff ----------
 
     @agent.tool
     def begin_play(ctx: RunContext[BootstrapperDeps]) -> str:
         """Hand off to the Director and start turn 0. Requires location, thread,
-        event, player location, and positive HP."""
+        event, player location, positive HP, and a set narrative_time."""
         world = ctx.deps.world
         missing: list[str] = []
         if not world.locations:
@@ -196,6 +203,8 @@ def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, st
             missing.append("player has no location_id (call move_player)")
         if world.player.stats.hp <= 0:
             missing.append("player hp <= 0 (call update_player_stats)")
+        if not world.narrative_time:
+            missing.append("narrative_time empty (call advance_narrative_time)")
         if missing:
             return "error: cannot begin_play yet — " + "; ".join(missing)
         world.turn = 0

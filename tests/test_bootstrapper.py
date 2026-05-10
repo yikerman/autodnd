@@ -103,7 +103,12 @@ def test_begin_play_succeeds_after_seeding():
                     args={"stats": {"hp": 12, "hp_max": 12, "ac": 13}},
                     tool_call_id="c5",
                 ),
-                ToolCallPart(tool_name="begin_play", args={}, tool_call_id="c6"),
+                ToolCallPart(
+                    tool_name="advance_narrative_time",
+                    args={"to": "Day 1, dusk"},
+                    tool_call_id="c6",
+                ),
+                ToolCallPart(tool_name="begin_play", args={}, tool_call_id="c7"),
             ]
         ),
         ModelResponse(parts=[TextPart("You stand in the inn, dusk light fading.")]),
@@ -123,8 +128,73 @@ def test_begin_play_succeeds_after_seeding():
     assert "e1" in world.events
     assert world.player.location_id == "inn"
     assert world.player.stats.hp == 12
+    assert world.narrative_time == "Day 1, dusk"
     assert prose == "You stand in the inn, dusk light fading."
     assert history  # non-empty list of ModelMessages
+
+
+def test_begin_play_rejects_when_narrative_time_unset():
+    """All other invariants met but narrative_time empty -> begin_play returns
+    error and world.turn stays -1."""
+    world = _empty_world()
+
+    script = [
+        ModelResponse(
+            parts=[
+                ToolCallPart(
+                    tool_name="create_location",
+                    args={"id": "inn", "name": "Inn", "description": "..."},
+                    tool_call_id="c1",
+                ),
+                ToolCallPart(
+                    tool_name="create_thread",
+                    args={
+                        "id": "t",
+                        "name": "Mission",
+                        "parent_id": None,
+                        "description": "...",
+                    },
+                    tool_call_id="c2",
+                ),
+                ToolCallPart(
+                    tool_name="mint_event",
+                    args={
+                        "id": "e1",
+                        "narrative_time": "today, dusk",
+                        "location_id": "inn",
+                        "participants": [],
+                        "description": "Arrived at the inn.",
+                        "thread_id": "t",
+                    },
+                    tool_call_id="c3",
+                ),
+                ToolCallPart(
+                    tool_name="move_player",
+                    args={"location_id": "inn"},
+                    tool_call_id="c4",
+                ),
+                ToolCallPart(
+                    tool_name="update_player_stats",
+                    args={"stats": {"hp": 12, "hp_max": 12, "ac": 13}},
+                    tool_call_id="c5",
+                ),
+                # Note: no advance_narrative_time before begin_play.
+                ToolCallPart(tool_name="begin_play", args={}, tool_call_id="c6"),
+            ]
+        ),
+        ModelResponse(parts=[TextPart("ack")]),
+    ]
+    step = {"n": 0}
+
+    def model_fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        resp = script[step["n"]]
+        step["n"] += 1
+        return resp
+
+    run_bootstrapper(world, "test", model=FunctionModel(model_fn))
+
+    assert world.turn == -1
+    assert world.narrative_time == ""
 
 
 def test_run_bootstrapper_threads_message_history():
