@@ -1,12 +1,17 @@
 """WorldDB — the single source of truth.
 
-Four atoms: Location, Character, Item, History. Player is `characters["player"]`
-(no special atom). Knowledge / beliefs / log / disposition are derived from
-history filtered by `participants` — never stored as separate fields.
+Four world atoms: Location, Player, Character, Item, History. The player has
+their own field because player agency is not parallel to NPC agency. NPCs live
+in ``characters``; the reserved participant token ``"player"`` refers to
+``world.player`` in history and item ownership.
 
-`Character.description` is PUBLIC identity only (race, appearance, manner, voice,
-role). Anything spoilable — secrets, plans, stances, private history — lives in
-History records with the character as participant.
+Knowledge / beliefs / log / disposition are derived from history filtered by
+``participants`` — never stored as separate fields.
+
+``Player.description`` and ``Character.description`` are PUBLIC identity only
+(race, appearance, manner, voice, role). Anything spoilable — secrets, plans,
+stances, private history — lives in History records with the knower as
+participant.
 """
 
 from __future__ import annotations
@@ -14,6 +19,8 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
+
+PLAYER = "player"
 
 
 class Abilities(BaseModel):
@@ -31,8 +38,7 @@ class Location(BaseModel):
     description: str
 
 
-class Character(BaseModel):
-    id: str
+class ActorState(BaseModel):
     name: str
     description: str
     location_id: str
@@ -42,6 +48,14 @@ class Character(BaseModel):
     abilities: Abilities = Field(default_factory=Abilities)
     skill_mods: dict[str, int] = Field(default_factory=dict)
     gold: int = 0
+
+
+class Player(ActorState):
+    pass
+
+
+class Character(ActorState):
+    id: str
 
 
 class AtLocation(BaseModel):
@@ -84,6 +98,7 @@ class History(BaseModel):
 
 
 class World(BaseModel):
+    player: Player | None = None
     locations: dict[str, Location] = Field(default_factory=dict)
     characters: dict[str, Character] = Field(default_factory=dict)
     items: dict[str, Item] = Field(default_factory=dict)

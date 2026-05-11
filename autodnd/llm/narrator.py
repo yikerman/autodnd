@@ -47,7 +47,7 @@ def run_narrator(
     trace_run("narrator", result, (time.perf_counter() - start) * 1000)
     prose = result.output
 
-    player = world.characters.get("player")
+    player = world.player
     location_id = player.location_id if player is not None else None
     mint_result = mint_history(
         world,

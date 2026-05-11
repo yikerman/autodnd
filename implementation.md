@@ -9,8 +9,8 @@ validation, what's rough, and alternatives we didn't take.
 
 | Layer         | Files                                                                                             |
 | ------------- | ------------------------------------------------------------------------------------------------- |
-| Atoms / state | `autodnd/engine/world.py` — Location, Character, Item, History, World                             |
-| Mutations     | `autodnd/engine/delta.py` — 9 deltas, `(world, **kwargs) → "ok"\|"error"`                         |
+| Atoms / state | `autodnd/engine/world.py` — Location, Player, Character, Item, History, World                     |
+| Mutations     | `autodnd/engine/delta.py` — deltas for locations, NPCs, the player, items, and history            |
 | Dice          | `autodnd/engine/{rules,resolution}.py` — `roll/check/attack/save`                                 |
 | Perception    | `autodnd/engine/perception.py` — `who_is_in`, `passive_perception`, `names_leaked_in_description` |
 | Renders       | `autodnd/engine/render.py` — `render_arbiter / for_character / for_narrator / for_player`         |
@@ -25,7 +25,7 @@ validation, what's rough, and alternatives we didn't take.
 
 ### Schema
 
-- **Player is `characters["player"]`** — no special atom. The id literal `"player"` is referenced in `render_for_narrator`, `render_for_player`, and the persistence test for spot-check.
+- **Player is `world.player`** — player agency is not parallel to NPC agency. NPCs live in `characters`; the reserved participant / item-holder token `"player"` refers to `world.player`.
 - **`History` is frozen** (`model_config = {"frozen": True}` in `world.py`). Required for the cache-prefix invariant in `render_for_character` ("What you remember" is append-only).
 - **`ItemPosition` is a discriminated union** of `AtLocation | HeldBy` with `kind` discriminator. Pydantic 2 needs the discriminator annotation — see `world.py:55`.
 - **`Abilities` uses full English field names** (`strength`, `dexterity`, …) to avoid clashing with Python builtins (`int`, `str`).
@@ -34,7 +34,9 @@ validation, what's rough, and alternatives we didn't take.
 ### Deltas
 
 - **Errors as return strings, not exceptions.** Each delta returns `"ok: ..."` or `"error: ..."`. The LLM tool wrapper passes the string back as the tool result; LLM self-corrects on the next round. Existing pattern from legacy; carry forward.
-- **`update_stats` clamps HP when hp_max is lowered alone** (`delta.py`). When hp is also given, it must respect the new hp_max.
+- **Player and NPC deltas are split.** `create_player`/`move_player`/`update_player_stats` operate on `world.player`; `create_character`/`move`/`update_stats` operate on NPCs and refuse `character_id="player"`. Prevents the arbiter from minting an NPC named after the player or invoking the player as an actor — a failure mode observed in early traces.
+- **`update_*_stats` clamps HP when hp_max is lowered alone.** When hp is also given, it must respect the new hp_max. Shared validator in `_update_actor_state`.
+- **`record_player_input` is engine-side only.** Called once per cycle in `run_cycle`; not exposed to the arbiter. Mints a record with the player and every co-located NPC as participants so NPC memory sees player input on their next render.
 - **`mint_history` engine-assigns id (`h{t}`) and monotonic `t`.** Caller never picks these.
 - **Empty `participants` is valid** — cosmic happenings nobody knows. Arbiter still sees them.
 

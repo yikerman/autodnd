@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 
+import pytest
+
 from pydantic_ai.messages import (
     ModelMessage,
     ModelResponse,
@@ -135,7 +137,7 @@ def test_transfer_item_validates_ownership() -> None:
     assert w.items["shortsword"].position.character_id == "player"
 
 
-def test_transfer_item_happy_path() -> None:
+def test_player_is_not_an_npc_actor() -> None:
     w = World()
     vale_inn(w)
     agent = build_character_agent(
@@ -144,10 +146,8 @@ def test_transfer_item_happy_path() -> None:
             {"item_id": "shortsword", "recipient_character_id": "brona"},
         )
     )
-    # Player holds shortsword; transferring to brona should succeed.
-    _prose, _deps = run_character(agent, w, "player")
-    assert isinstance(w.items["shortsword"].position, HeldBy)
-    assert w.items["shortsword"].position.character_id == "brona"
+    with pytest.raises(ValueError):
+        run_character(agent, w, "player")
 
 
 def test_request_dice_check_is_self_only() -> None:

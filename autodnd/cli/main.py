@@ -144,9 +144,7 @@ def main() -> None:
 
     if needs_opening:
         try:
-            deps = run_cycle(
-                arbiter, character, narrator, world, "[opening scene]", rng=rng
-            )
+            deps = run_cycle(arbiter, character, narrator, world, None, rng=rng)
         except Exception as e:  # noqa: BLE001
             print_block(f"Opening cycle aborted: {e}", kind="error")
             return

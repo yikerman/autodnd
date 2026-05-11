@@ -118,7 +118,8 @@ def test_bootstrapper_registers_creation_tools_plus_begin_play() -> None:
     tools = set(agent._function_toolset.tools.keys())
     assert tools == {
         "create_location",
-        "create_character",
+        "create_player",
+        "create_npc",
         "create_item",
         "mint_history",
         "set_opening_time",
@@ -147,7 +148,7 @@ def test_begin_play_rejects_empty_world() -> None:
     assert returns and returns[0].startswith("error:")
     msg = returns[0]
     assert "no locations created" in msg
-    assert "player character not created" in msg
+    assert "player not created" in msg
     assert "no opening scene history" in msg
     assert "narrative time" in msg
 
@@ -169,9 +170,8 @@ def test_begin_play_rejects_partial_world() -> None:
                         "c1",
                     ),
                     _tool_call(
-                        "create_character",
+                        "create_player",
                         {
-                            "character_id": "player",
                             "name": "Hero",
                             "description": "A wanderer.",
                             "location_id": "field",
@@ -202,7 +202,7 @@ def test_begin_play_rejects_partial_world() -> None:
     assert "no opening scene history" in msg
     assert "narrative time" in msg
     assert "no locations created" not in msg
-    assert "player character not created" not in msg
+    assert "player not created" not in msg
 
 
 def test_begin_play_accepts_complete_world() -> None:
@@ -221,9 +221,8 @@ def test_begin_play_accepts_complete_world() -> None:
                         "c1",
                     ),
                     _tool_call(
-                        "create_character",
+                        "create_player",
                         {
-                            "character_id": "player",
                             "name": "Hero",
                             "description": "A wanderer.",
                             "location_id": "field",
@@ -261,7 +260,8 @@ def test_begin_play_accepts_complete_world() -> None:
     )
     assert ready is True
     assert "field" in w.locations
-    assert "player" in w.characters
+    assert w.player is not None
+    assert w.player.name == "Hero"
     assert len(w.history) == 1
     assert w.narrative_time == "Day 1, midmorning"
 
@@ -283,9 +283,8 @@ def test_begin_play_retries_after_error() -> None:
                         "c2",
                     ),
                     _tool_call(
-                        "create_character",
+                        "create_player",
                         {
-                            "character_id": "player",
                             "name": "Hero",
                             "description": "A wanderer.",
                             "location_id": "field",

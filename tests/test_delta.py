@@ -11,11 +11,12 @@ from autodnd.engine.delta import (
     create_character,
     create_item,
     create_location,
+    create_player,
     mint_history,
-    move,
+    move_player,
     transfer_item,
     update_item_description,
-    update_stats,
+    update_player_stats,
 )
 from autodnd.engine.world import AtLocation, HeldBy, World
 
@@ -24,9 +25,8 @@ def _seeded() -> World:
     w = World()
     create_location(w, location_id="inn", name="Inn", description="warm")
     create_location(w, location_id="road", name="Road", description="dusty")
-    create_character(
+    create_player(
         w,
-        character_id="player",
         name="Fox",
         description="scout",
         location_id="inn",
@@ -199,14 +199,16 @@ def test_mint_history_empty_participants_ok() -> None:
 
 def test_move_happy() -> None:
     w = _seeded()
-    assert move(w, character_id="player", location_id="road").startswith("ok:")
-    assert w.characters["player"].location_id == "road"
+    assert move_player(w, location_id="road").startswith("ok:")
+    assert w.player is not None
+    assert w.player.location_id == "road"
 
 
 def test_move_unknown_location_rejected() -> None:
     w = _seeded()
-    assert move(w, character_id="player", location_id="nowhere").startswith("error:")
-    assert w.characters["player"].location_id == "inn"
+    assert move_player(w, location_id="nowhere").startswith("error:")
+    assert w.player is not None
+    assert w.player.location_id == "inn"
 
 
 # ---------- update_stats ----------
@@ -214,32 +216,35 @@ def test_move_unknown_location_rejected() -> None:
 
 def test_update_stats_partial_change() -> None:
     w = _seeded()
-    update_stats(w, character_id="player", hp=5, gold=10)
-    assert w.characters["player"].hp == 5
-    assert w.characters["player"].gold == 10
-    assert w.characters["player"].ac == 12  # unchanged
+    update_player_stats(w, hp=5, gold=10)
+    assert w.player is not None
+    assert w.player.hp == 5
+    assert w.player.gold == 10
+    assert w.player.ac == 12  # unchanged
 
 
 def test_update_stats_clamps_when_lowering_hp_max() -> None:
     w = _seeded()
     # player has hp=10, hp_max=10
-    update_stats(w, character_id="player", hp_max=5)
-    assert w.characters["player"].hp_max == 5
-    assert w.characters["player"].hp == 5  # clamped
+    update_player_stats(w, hp_max=5)
+    assert w.player is not None
+    assert w.player.hp_max == 5
+    assert w.player.hp == 5  # clamped
 
 
 def test_update_stats_rejects_hp_above_max() -> None:
     w = _seeded()
-    result = update_stats(w, character_id="player", hp=999)
+    result = update_player_stats(w, hp=999)
     assert result.startswith("error:")
-    assert w.characters["player"].hp == 10
+    assert w.player is not None
+    assert w.player.hp == 10
 
 
 def test_update_stats_rejects_negative() -> None:
     w = _seeded()
-    assert update_stats(w, character_id="player", gold=-1).startswith("error:")
-    assert update_stats(w, character_id="player", hp=-1).startswith("error:")
-    assert update_stats(w, character_id="player", ac=-1).startswith("error:")
+    assert update_player_stats(w, gold=-1).startswith("error:")
+    assert update_player_stats(w, hp=-1).startswith("error:")
+    assert update_player_stats(w, ac=-1).startswith("error:")
 
 
 # ---------- transfer_item ----------

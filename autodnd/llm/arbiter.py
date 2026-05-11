@@ -1,9 +1,13 @@
 """Arbiter LLM agent — the conductor.
 
-15 tools: 3 creation + 1 mint + 5 state mutation + 4 dice + 2 control.
-Runs as a multi-round session per cycle. ``invoke_actor`` dispatches to
-character or narrator agents (passed in via deps); their prose accumulates
-into ``deps.prose_blocks`` for the engine to emit to the player.
+Creation, history, state mutation, dice, and control tools. Runs as a
+multi-round session per cycle. ``invoke_actor`` dispatches to character or
+narrator agents (passed in via deps); their prose accumulates into
+``deps.prose_blocks`` for the engine to emit to the player.
+
+The player's input is auto-recorded by ``run_cycle`` before the arbiter runs,
+so the arbiter never records player input itself — it sees the trigger in the
+user prompt and mints downstream consequences.
 
 The arbiter never writes prose itself — that's the actors' job. The arbiter
 mints history, rolls dice, applies state, and decides who acts when.
@@ -26,8 +30,11 @@ from autodnd.engine.delta import (
     create_location as _create_location,
     mint_history as _mint_history,
     move as _move,
+    move_player as _move_player,
+    record_player_input as _record_player_input,
     transfer_item as _transfer_item,
     update_item_description as _update_item_description,
+    update_player_stats as _update_player_stats,
     update_stats as _update_stats,
 )
 from autodnd.engine.perception import names_leaked_in_description
@@ -42,6 +49,7 @@ from autodnd.engine.world import (
     Abilities,
     AtLocation,
     HeldBy,
+    PLAYER,
     World,
 )
 from autodnd.llm.character import CharacterDeps, run_character
@@ -106,7 +114,7 @@ def build_arbiter_agent(model: Model) -> Agent[ArbiterDeps, str]:
         )
 
     @agent.tool
-    def create_character(
+    def create_npc(
         ctx: RunContext[ArbiterDeps],
         character_id: str,
         name: str,
@@ -196,11 +204,33 @@ def build_arbiter_agent(model: Model) -> Agent[ArbiterDeps, str]:
     # ---------- State mutation ----------
 
     @agent.tool
-    def move(ctx: RunContext[ArbiterDeps], character_id: str, location_id: str) -> str:
+    def move_player(ctx: RunContext[ArbiterDeps], location_id: str) -> str:
+        return _move_player(ctx.deps.world, location_id=location_id)
+
+    @agent.tool
+    def update_player_stats(
+        ctx: RunContext[ArbiterDeps],
+        hp: int | None = None,
+        hp_max: int | None = None,
+        ac: int | None = None,
+        gold: int | None = None,
+    ) -> str:
+        return _update_player_stats(
+            ctx.deps.world,
+            hp=hp,
+            hp_max=hp_max,
+            ac=ac,
+            gold=gold,
+        )
+
+    @agent.tool
+    def move_npc(
+        ctx: RunContext[ArbiterDeps], character_id: str, location_id: str
+    ) -> str:
         return _move(ctx.deps.world, character_id=character_id, location_id=location_id)
 
     @agent.tool
-    def update_stats(
+    def update_npc_stats(
         ctx: RunContext[ArbiterDeps],
         character_id: str,
         hp: int | None = None,
@@ -286,6 +316,8 @@ def build_arbiter_agent(model: Model) -> Agent[ArbiterDeps, str]:
     def invoke_actor(ctx: RunContext[ArbiterDeps], actor_id: str, hint: str) -> str:
         """Invoke a character or the narrator. Returns a summary of what they did."""
         deps = ctx.deps
+        if actor_id == PLAYER:
+            return "error: the player is controlled by the human; do not invoke player"
         if actor_id == "narrator":
             prose, event_id = run_narrator(
                 deps.narrator_agent,
@@ -338,7 +370,7 @@ def run_cycle(
     character_agent: Agent[CharacterDeps, str],
     narrator_agent: Agent[None, str],
     world: World,
-    trigger: str,
+    trigger: str | None,
     *,
     rng: random.Random | None = None,
 ) -> ArbiterDeps:
@@ -354,6 +386,10 @@ def run_cycle(
         narrator_agent=narrator_agent,
         rng=rng or random.Random(),
     )
+    if trigger is not None:
+        player_record = _record_player_input(world, content=trigger)
+        if player_record.startswith("ok:"):
+            deps.cycle_history_ids.append(world.history[-1].id)
     _system, user = render_arbiter(world, trigger)
     start = time.perf_counter()
     result = arbiter_agent.run_sync(user, deps=deps)

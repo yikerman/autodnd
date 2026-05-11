@@ -21,9 +21,10 @@ from autodnd.engine.delta import (
     create_character as _create_character,
     create_item as _create_item,
     create_location as _create_location,
+    create_player as _create_player,
     mint_history as _mint_history,
 )
-from autodnd.engine.world import Abilities, AtLocation, HeldBy, World
+from autodnd.engine.world import Abilities, AtLocation, HeldBy, PLAYER, World
 from autodnd.trace import trace_run
 
 
@@ -43,21 +44,24 @@ cluster of mints. Do not survey; do not bury the player.
 
 Aim for a textured opening, not a sketch:
 - 4-8 locations the campaign could plausibly reach.
-- 4-10 characters total, one of which MUST be `character_id="player"`.
+- 1 player created with `create_player`.
+- 3-9 NPCs created with `create_npc`.
 - 0-6 items, placed at locations or held by characters.
 - 10-25 history records mixing:
   - cosmic backstory (`participants=[]`) — old wars, conspiracies, omens;
-  - per-character private knowledge (single participant) — secrets, plans,
-    motives, debts, false beliefs;
+  - private knowledge (single participant) — `player` for the player, or an
+    NPC id for an NPC's secrets, plans, motives, debts, false beliefs;
   - at least one in-scene beat (multi-participant including `player`) so play
     has a starting moment.
 
 # Atom rules
 
-- Player MUST use `character_id="player"`. The player is a character, not a
-  separate atom.
-- `Character.description` is PUBLIC-facing identity only — race, appearance,
-  manner, voice, role. NEVER secrets, plans, stances, or private history.
+- The player MUST be created with `create_player`. Never create an NPC named
+  after the player.
+- NPCs use `create_npc`.
+- `Player.description` and `Character.description` are PUBLIC-facing identity
+  only — race, appearance, manner, voice, role. NEVER secrets, plans, stances,
+  or private history.
   Spoilable content lives in private history records with that character as
   the sole participant.
 - Items use exactly one of `at_location_id` or `held_by_character_id`.
@@ -115,7 +119,32 @@ def build_bootstrapper_agent(model: Model) -> Agent[BootstrapperDeps, str]:
         )
 
     @agent.tool
-    def create_character(
+    def create_player(
+        ctx: RunContext[BootstrapperDeps],
+        name: str,
+        description: str,
+        location_id: str,
+        hp: int,
+        hp_max: int,
+        ac: int,
+        gold: int = 0,
+        skill_mods: dict[str, int] | None = None,
+    ) -> str:
+        return _create_player(
+            ctx.deps.world,
+            name=name,
+            description=description,
+            location_id=location_id,
+            hp=hp,
+            hp_max=hp_max,
+            ac=ac,
+            abilities=Abilities(),
+            skill_mods=skill_mods,
+            gold=gold,
+        )
+
+    @agent.tool
+    def create_npc(
         ctx: RunContext[BootstrapperDeps],
         character_id: str,
         name: str,
@@ -198,16 +227,16 @@ def build_bootstrapper_agent(model: Model) -> Agent[BootstrapperDeps, str]:
         missing: list[str] = []
         if not world.locations:
             missing.append("no locations created")
-        player = world.characters.get("player")
+        player = world.player
         if player is None:
-            missing.append("player character not created (use character_id='player')")
+            missing.append("player not created (use create_player)")
         else:
             if player.hp <= 0:
                 missing.append("player hp is 0 — start the player with positive hp")
             if player.location_id not in world.locations:
                 missing.append("player's location is unknown")
         if not any(
-            h.location_id is not None and "player" in h.participants
+            h.location_id is not None and PLAYER in h.participants
             for h in world.history
         ):
             missing.append(

@@ -1,4 +1,4 @@
-"""Arbiter agent: 15 tools, invoke_actor dispatch, defensive leak check."""
+"""Arbiter agent: tool wiring, invoke_actor dispatch, defensive leak check."""
 
 from __future__ import annotations
 
@@ -23,16 +23,18 @@ from autodnd.llm.narrator import build_narrator_agent
 # ---------- Wiring ----------
 
 
-def test_arbiter_registers_15_tools() -> None:
+def test_arbiter_registers_tools() -> None:
     agent = build_arbiter_agent(TestModel())
     tools = set(agent._function_toolset.tools.keys())
     expected = {
         "create_location",
-        "create_character",
+        "create_npc",
         "create_item",
         "mint_history",
-        "move",
-        "update_stats",
+        "move_player",
+        "update_player_stats",
+        "move_npc",
+        "update_npc_stats",
         "transfer_item",
         "update_item_description",
         "advance_narrative_time",
@@ -44,7 +46,6 @@ def test_arbiter_registers_15_tools() -> None:
         "end_cycle",
     }
     assert tools == expected
-    assert len(tools) == 15
 
 
 # ---------- invoke_actor dispatch ----------

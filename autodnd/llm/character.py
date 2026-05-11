@@ -28,7 +28,7 @@ from autodnd.engine.delta import transfer_item as delta_transfer_item
 from autodnd.engine.perception import who_is_in
 from autodnd.engine.render import render_for_character
 from autodnd.engine.rules import resolve_attack, resolve_check, resolve_save
-from autodnd.engine.world import HeldBy, World
+from autodnd.engine.world import PLAYER, HeldBy, World
 from autodnd.trace import trace_run
 
 
@@ -146,6 +146,12 @@ def build_character_agent(model: Model) -> Agent[CharacterDeps, str]:
     ) -> str:
         """Give an item you currently hold to another character."""
         world = ctx.deps.world
+        if recipient_character_id == PLAYER:
+            recipient = HeldBy(character_id=PLAYER)
+        elif recipient_character_id in world.characters:
+            recipient = HeldBy(character_id=recipient_character_id)
+        else:
+            return f"error: character {recipient_character_id!r} does not exist"
         item = world.items.get(item_id)
         if item is None:
             return f"error: item {item_id!r} does not exist"
@@ -154,11 +160,7 @@ def build_character_agent(model: Model) -> Agent[CharacterDeps, str]:
             and item.position.character_id == ctx.deps.character_id
         ):
             return f"error: you don't hold {item_id!r}"
-        return delta_transfer_item(
-            world,
-            item_id=item_id,
-            to=HeldBy(character_id=recipient_character_id),
-        )
+        return delta_transfer_item(world, item_id=item_id, to=recipient)
 
     return agent
 
@@ -178,6 +180,8 @@ def run_character(
     during this call. ``deps.intents`` carries ``act()`` declarations the
     arbiter must resolve on its next round.
     """
+    if character_id == PLAYER:
+        raise ValueError("the player is not an NPC actor")
     _system, user = render_for_character(
         world,
         character_id,

@@ -9,14 +9,15 @@ from __future__ import annotations
 
 import re
 
-from autodnd.engine.world import Character, World
+from autodnd.engine.world import PLAYER, Character, World
 
 
 def who_is_in(world: World, location_id: str) -> list[str]:
-    """Character ids currently at ``location_id``, sorted for determinism."""
-    return sorted(
-        cid for cid, c in world.characters.items() if c.location_id == location_id
-    )
+    """Participant ids currently at ``location_id``, sorted for determinism."""
+    ids = [cid for cid, c in world.characters.items() if c.location_id == location_id]
+    if world.player is not None and world.player.location_id == location_id:
+        ids.append(PLAYER)
+    return sorted(ids)
 
 
 def passive_perception(character: Character) -> int:
@@ -39,6 +40,14 @@ def names_leaked_in_description(
     """
     leaked: list[str] = []
     participants_set = set(participants)
+    if (
+        world.player is not None
+        and PLAYER not in participants_set
+        and re.search(
+            rf"\b{re.escape(world.player.name)}\b", description, re.IGNORECASE
+        )
+    ):
+        leaked.append(PLAYER)
     for cid, char in world.characters.items():
         if cid in participants_set:
             continue

@@ -13,6 +13,7 @@ from autodnd.engine.delta import (
     create_character,
     create_item,
     create_location,
+    create_player,
     mint_history,
 )
 from autodnd.engine.world import HeldBy, World
@@ -29,9 +30,8 @@ def vale_inn(world: World) -> None:
             "Long bar of dark oak, three tables, a hearth at the back."
         ),
     )
-    create_character(
+    create_player(
         world,
-        character_id="player",
         name="Fox",
         description=(
             "A wandering scout, lean and quiet, with watchful eyes and "
@@ -178,9 +178,8 @@ def waymeet_scene(world: World) -> None:
 
     # ---------- Characters: PUBLIC-ONLY descriptions ----------
     # Anything spoilable (motive, secret, plan, history) goes into History.
-    create_character(
+    create_player(
         world,
-        character_id="player",
         name="Fox Arthur",
         description=(
             "A young elven scholar in road-stained traveler's leathers, with "
