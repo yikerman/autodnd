@@ -1,23 +1,20 @@
-"""Resolution — the structured result of a deterministic rules call.
+"""Resolution — the structured outcome of a dice resolution."""
 
-Every dice/check/attack/save returns a :class:`Resolution`. The Director
-reads it and writes prose + canon mutations consistent with it; the
-Director cannot author a success it didn't roll.
-"""
+from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel
-
-ResolutionKind = Literal["raw_roll", "check", "attack", "save"]
+ResolutionKind = Literal["check", "attack", "save"]
 Outcome = Literal["success", "failure", "critical_success", "critical_failure"]
 
 
-class Resolution(BaseModel):
+@dataclass(frozen=True)
+class Resolution:
     kind: ResolutionKind
-    outcome: Outcome | None = None  # None for raw_roll (no DC/target)
-    roll: int  # the d20 face value (or sum for raw_roll)
-    modifier: int = 0
+    outcome: Outcome
+    roll: int  # the d20
+    modifier: int  # bonus added to the roll
     total: int  # roll + modifier
-    target: int | None = None  # DC for check/save; AC for attack
-    detail: str = ""  # human-readable summary
+    target: int  # DC or AC
+    detail: str  # human-readable summary

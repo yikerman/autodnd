@@ -1,15 +1,12 @@
-"""Per-session human-readable trace log for every Agent.run_sync call.
+"""Per-session human-readable trace log for every LLM call.
 
-One ``trace/<timestamp>.log`` file per session. Each agent call is bracketed
-by ``=== step N · agent · turn T ===`` and
-``=== step N end · LATENCYms · IN→OUT tokens ===`` banners. Inside, one
-labeled block per pydantic-ai message part: ``[system]``, ``[user]``,
-``[tool]`` (call + return paired by ``tool_call_id``), ``[retry]``,
-``[think]``, ``[text]``.
+One ``trace/<timestamp>.log`` per session. Each call is bracketed by a banner
+and a closing banner with latency and token counts. Inside, one labeled block
+per pydantic-ai message part: ``[system]``, ``[user]``, ``[tool]``, ``[text]``,
+``[think]``, ``[retry]``.
 
-Enabled via the ``--trace`` CLI flag in :mod:`autodnd.cli.main`, which calls
-:func:`init`. When ``init`` hasn't been called, :func:`start_run` and
-:func:`end_run` no-op.
+Enable via :func:`init`. When ``init`` hasn't been called, :func:`trace_run`
+is a no-op — wrap every agent run regardless.
 """
 
 from __future__ import annotations
@@ -34,14 +31,13 @@ from pydantic_ai.messages import (
 )
 
 _TRACE_FILE: Path | None = None
-_STEP_COUNTER = 0
+_STEP = 0
 
 
 def init(directory: str | Path = "trace") -> Path:
-    """Open a per-session trace file at ``<directory>/<timestamp>.log``,
-    creating ``<directory>`` if missing. Resets the step counter."""
-    global _TRACE_FILE, _STEP_COUNTER
-    _STEP_COUNTER = 0
+    """Open a per-session trace file. Returns the path."""
+    global _TRACE_FILE, _STEP
+    _STEP = 0
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -58,60 +54,40 @@ def current_path() -> Path | None:
     return _TRACE_FILE
 
 
-def start_run(
-    *,
-    agent: str,
-    world_turn: int | None,
+def trace_run(
+    agent_name: str,
+    result: Any,
+    latency_ms: float,
     extra: dict[str, Any] | None = None,
-) -> int:
-    """Increment the step counter, write the opening banner, return the step
-    ID. Returns 0 when tracing is not initialized — pass that 0 back to
-    :func:`end_run` and it'll skip too."""
-    global _STEP_COUNTER
+) -> None:
+    """Append one trace block for an agent run. No-op when tracing is disabled."""
+    global _STEP
     if _TRACE_FILE is None:
-        return 0
-    _STEP_COUNTER += 1
-    step = _STEP_COUNTER
-    bits = [f"step {step}", agent, f"turn {world_turn}"]
+        return
+    _STEP += 1
+    bits = [f"step {_STEP}", agent_name]
     if extra:
         bits.extend(f"{k}={v!r}" for k, v in extra.items())
     _write("=== " + " · ".join(bits) + " ===\n")
-    return step
 
-
-def end_run(
-    *,
-    step: int,
-    agent: str,
-    world_turn: int | None,
-    result: Any,
-    latency_ms: float,
-) -> None:
-    """Walk ``result.new_messages()`` emitting one block per part, then the
-    closing banner with latency + token counts. No-op when tracing not
-    initialized or ``step == 0``."""
-    if _TRACE_FILE is None or step == 0:
-        return
-    for tag_line, body in _walk(result.new_messages()):
-        _write_block(tag_line, body)
+    for tag, body in _walk(result.new_messages()):
+        _write_block(tag, body)
 
     usage = result.usage()
     in_tok = getattr(usage, "input_tokens", 0) or 0
     out_tok = getattr(usage, "output_tokens", 0) or 0
-    bits = [
-        f"step {step} end",
+    closing = [
+        f"step {_STEP} end",
         f"{round(latency_ms)}ms",
         f"{in_tok}→{out_tok} tokens",
     ]
-    _write("\n=== " + " · ".join(bits) + " ===\n\n")
+    _write("\n=== " + " · ".join(closing) + " ===\n\n")
 
 
 # ---------- internals ----------
 
 
 def _walk(messages: Iterable[ModelMessage]) -> Iterator[tuple[str, str]]:
-    """Yield (tag_line, body) for each loggable part. Pairs each ToolCallPart
-    with its ToolReturnPart (by tool_call_id) into one ``[tool]`` block."""
     returns_by_id: dict[str, ToolReturnPart] = {}
     for msg in messages:
         if isinstance(msg, ModelRequest):
@@ -133,7 +109,6 @@ def _walk(messages: Iterable[ModelMessage]) -> Iterator[tuple[str, str]]:
                 elif isinstance(part, ToolReturnPart):
                     if part.tool_call_id in paired:
                         continue
-                    # orphan return: matching call wasn't in new_messages
                     yield (
                         f"[tool-return] {part.tool_name}",
                         f"ret: {_stringify(part.content)}",
@@ -157,7 +132,7 @@ def _walk(messages: Iterable[ModelMessage]) -> Iterator[tuple[str, str]]:
                         yield "[text]", part.content
 
 
-def _format_args(args: str | dict[str, Any] | None) -> str:
+def _format_args(args: Any) -> str:
     if args is None:
         return "(none)"
     if isinstance(args, str):
@@ -171,12 +146,12 @@ def _stringify(content: Any) -> str:
     return json.dumps(content, ensure_ascii=False, default=str)
 
 
-def _write_block(tag_line: str, body: str) -> None:
+def _write_block(tag: str, body: str) -> None:
     if not body.strip():
-        _write(f"\n{tag_line}\n")
+        _write(f"\n{tag}\n")
         return
     indented = "\n".join("  " + line for line in body.splitlines())
-    _write(f"\n{tag_line}\n{indented}\n")
+    _write(f"\n{tag}\n{indented}\n")
 
 
 def _write(text: str) -> None:

@@ -1,118 +1,58 @@
-"""REPL entry point for AutoDND.
+"""REPL entry point.
 
-Per turn: free-text input → Director (omniscient + dice/mutation tools) → prose.
-Slash commands route to the Sidebar (read-only Q&A over the player's own state).
+Each free-text input triggers an arbiter cycle. The arbiter conducts the
+moment, invoking characters and the narrator in dramatic order; their prose
+blocks are concatenated in invocation order and printed to the player.
+
+Slash commands:
+- ``/help`` — this banner
+- ``/hp``, ``/log``, ``/inv`` — sidebar shortcuts
+- ``/ask <question>`` — free-form sidebar query
+- ``/save <path>`` — snapshot WorldDB + prose log to ``path``
+- ``/quit`` — exit
+
+Initial world: ``--demo-scene vale`` or ``--demo-scene waymeet`` loads a
+hardcoded fixture; ``--load <path>`` resumes a saved session; no flag
+falls through to the one-shot bootstrapper.
 """
 
 from __future__ import annotations
 
 import argparse
 import random
-import readline  # noqa: F401  # imported for its side effect: arrow-key line editing in input()
+import readline  # noqa: F401  # imported for side effect: arrow-key line editing
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic_ai.messages import ModelMessage
 
+from autodnd import trace as trace_module
 from autodnd.cli.output import print_block, print_status, read_input
-from autodnd.cli.persistence import load_session, save_session
-from autodnd.engine.world import CharacterStats, PlayerState, WorldModel
-from autodnd.fixtures import seed_inn_scene
-from autodnd.llm import tracing
-from autodnd.llm.bootstrapper import bootstrap_user_message, run_bootstrapper
-from autodnd.llm.director import run_director, turn_user_message
-from autodnd.llm.sidebar import run_sidebar
+from autodnd.engine.persistence import (
+    CycleProseEntry,
+    append_prose,
+    load_world,
+    read_prose_log,
+    save_world,
+)
+from autodnd.engine.world import World
+from autodnd.fixtures import vale_inn, waymeet_scene
+from autodnd.llm.arbiter import build_arbiter_agent, run_cycle
+from autodnd.llm.bootstrapper import build_bootstrapper_agent, run_bootstrapper
+from autodnd.llm.character import build_character_agent
+from autodnd.llm.client import model_from_env
+from autodnd.llm.narrator import build_narrator_agent
+from autodnd.llm.sidebar import SLASH_QUERIES, build_sidebar_agent, run_sidebar
 
 BANNER = """\
-AutoDND — solo one-shot DM. Type your action, or:
-  /hp        — show your HP
-  /log       — show recent events
+AutoDND — fictional world simulator. Type your action, or:
+  /hp        — show HP, AC, abilities
+  /log       — show recent memory
   /inv       — show inventory and gold
   /ask Q     — free-form sidebar question
-  /save FILE — snapshot session to FILE (resume later with --load FILE)
+  /save FILE — snapshot to FILE (resume with --load FILE)
   /help      — this banner
   /quit      — exit
 """
-
-SLASH_FAST_QUERIES = {
-    "/hp": "Show my HP, AC, ability scores, and modifiers.",
-    "/log": "Show my story log in chronological order.",
-    "/inv": "Show my inventory and gold.",
-}
-
-
-def _empty_world() -> WorldModel:
-    return WorldModel(
-        player=PlayerState(location_id="", stats=CharacterStats(hp=0, ac=0)),
-        turn=-1,
-    )
-
-
-def initialize_session(*, demo_scene: bool) -> tuple[WorldModel, str]:
-    """Returns (seeded world, opening prose).
-
-    Demo path uses the hardcoded fixture. LLM path runs the Bootstrapper in a
-    Q&A loop until it calls ``begin_play`` (which flips ``world.turn`` to 0);
-    the prose from that final turn is the opening narration.
-    """
-    world = _empty_world()
-    if demo_scene:
-        return world, seed_inn_scene(world)
-
-    history: list[ModelMessage] = []
-    user_msg = bootstrap_user_message()
-    while True:
-        prose, history = run_bootstrapper(world, user_msg, message_history=history)
-        _print_block(prose, kind="prose")
-        if world.turn == 0:
-            return world, prose
-        line = _read_input()
-        if line is None:
-            raise SystemExit(0)
-        if line in ("/quit", "/exit"):
-            raise SystemExit(0)
-        # Bootstrap doesn't route slash commands — Sidebar has no canon to
-        # read yet, and /save mid-bootstrap is out of scope.
-        user_msg = line
-
-
-def run_turn(
-    world: WorldModel,
-    player_input: str,
-    prior_prose: list[str],
-    player_prompts: list[str],
-    rng: random.Random,
-) -> str:
-    prose = run_director(
-        world,
-        turn_user_message(world, player_input, prior_prose, player_prompts),
-        rng,
-    )
-    world.turn += 1
-    return prose
-
-
-def handle_slash(line: str, world: WorldModel) -> str:
-    cmd, _, rest = line.partition(" ")
-    match cmd:
-        case "/help":
-            return BANNER
-        case "/quit" | "/exit":
-            raise SystemExit(0)
-        case "/hp" | "/log" | "/inv":
-            return run_sidebar(
-                world.player,
-                SLASH_FAST_QUERIES[cmd],
-                items=world.items,
-                world_turn=world.turn,
-            )
-        case "/ask":
-            query = rest.strip() or "Show my current status."
-            return run_sidebar(
-                world.player, query, items=world.items, world_turn=world.turn
-            )
-        case _:
-            return f"Unknown command: {cmd}. Try /help."
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -120,8 +60,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     start = parser.add_mutually_exclusive_group()
     start.add_argument(
         "--demo-scene",
-        action="store_true",
-        help="use the hardcoded Crow's Foot Inn fixture instead of LLM bootstrap",
+        choices=["vale", "waymeet"],
+        help="seed a hardcoded fixture instead of running the bootstrapper",
     )
     start.add_argument(
         "--load",
@@ -132,23 +72,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--trace",
         action="store_true",
-        help="write a human-readable agent trace to trace/<timestamp>.log",
+        help="write a human-readable trace to trace/<timestamp>.log",
     )
     return parser.parse_args(argv)
 
 
-def _is_status_message(text: str) -> bool:
-    """True for the bracket-prefixed engine messages run_turn returns when there's
-    nothing to narrate — used to style them differently from real prose."""
-    return text.startswith("[") and text.endswith("]") and "\n" not in text
-
-
-def _print_block(text: str, *, kind: str = "prose") -> None:
-    print_block(text, kind=kind)
-
-
-def _read_input() -> str | None:
-    return read_input()
+def _seed_demo(world: World, name: str) -> None:
+    if name == "vale":
+        vale_inn(world)
+    elif name == "waymeet":
+        waymeet_scene(world)
+    else:
+        raise ValueError(f"unknown demo scene: {name}")
 
 
 def main() -> None:
@@ -156,76 +91,150 @@ def main() -> None:
     args = parse_args()
     rng = random.Random()
 
-    trace_path = tracing.init() if args.trace else None
-
-    _print_block(BANNER, kind="banner")
-    if trace_path:
+    trace_path = trace_module.init() if args.trace else None
+    print_block(BANNER, kind="banner")
+    if trace_path is not None:
         print_status(f"Trace log: {trace_path}")
+
+    print_status("Building agents…")
+    model = model_from_env()
+    arbiter = build_arbiter_agent(model)
+    character = build_character_agent(model)
+    narrator = build_narrator_agent(model)
+    sidebar = build_sidebar_agent(model)
+
+    world = World()
+    save_path: Path | None = None
+    needs_opening = False
+    in_game = False
 
     if args.load is not None:
         print_status(f"Loading session from {args.load}…")
-        snap = load_session(args.load)
-        world = snap.world
-        prior_prose = snap.prior_prose
-        player_prompts = snap.player_prompts
-        if prior_prose:
-            _print_block(prior_prose[-1], kind="prose")
+        try:
+            world = load_world(args.load)
+        except (OSError, ValueError) as e:
+            print_block(f"Load failed: {e}", kind="error")
+            return
+        save_path = args.load
+        # Replay last cycle's prose so the player has context.
+        entries = read_prose_log(args.load)
+        if entries:
+            print_status(f"(resuming after {len(entries)} cycles)")
+            for block in entries[-1].blocks:
+                print_block(block, kind="prose")
+        in_game = True
+    elif args.demo_scene is not None:
+        print_status(f"Seeding demo scene: {args.demo_scene}")
+        _seed_demo(world, args.demo_scene)
+        needs_opening = True
     else:
-        print_status("Initializing world…")
-        world, opening_prose = initialize_session(demo_scene=args.demo_scene)
-        prior_prose = [opening_prose]
-        player_prompts = ["<none, scene initialized>"]
-        # Demo path prints opening here. LLM path's bootstrapper loop already
-        # printed each turn (including the opening), so suppress duplicate.
-        if args.demo_scene:
-            _print_block(opening_prose, kind="prose")
+        print_status("No fixture or save selected — entering bootstrapper interview.")
+        print_status("Type your replies; an empty line aborts.")
+        bootstrapper = build_bootstrapper_agent(model)
+        ready = run_bootstrapper(
+            bootstrapper,
+            world,
+            read_input=read_input,
+            on_agent_message=lambda s: print_block(s, kind="prose"),
+        )
+        if not ready:
+            print_block("(bootstrapper did not finish — exiting)", kind="error")
+            return
+        needs_opening = True
+
+    if needs_opening:
+        try:
+            deps = run_cycle(
+                arbiter, character, narrator, world, "[opening scene]", rng=rng
+            )
+        except Exception as e:  # noqa: BLE001
+            print_block(f"Opening cycle aborted: {e}", kind="error")
+            return
+        for prose in deps.prose_blocks:
+            print_block(prose, kind="prose")
+        for warning in deps.leak_warnings:
+            print_status(warning)
+        in_game = True
 
     while True:
-        line = _read_input()
+        line = read_input()
         if line is None:
             return
         if not line:
             continue
+        if line.startswith("/"):
+            should_quit, save_path = _handle_slash(
+                line, world, sidebar, save_path, in_game=in_game
+            )
+            if should_quit:
+                return
+            continue
+
         try:
-            if line.startswith("/save"):
-                _, _, rest = line.partition(" ")
-                target = rest.strip()
-                if not target:
-                    _print_block("Usage: /save <file>", kind="error")
-                    continue
-                path = Path(target)
-                try:
-                    save_session(
-                        path,
-                        world=world,
-                        prior_prose=prior_prose,
-                        player_prompts=player_prompts,
-                    )
-                except OSError as e:
-                    _print_block(f"Save failed: {e}", kind="error")
-                    continue
-                _print_block(
-                    f"Saved to {path}. Resume later with: autodnd --load {path}",
-                    kind="status",
+            deps = run_cycle(arbiter, character, narrator, world, line, rng=rng)
+        except Exception as e:  # noqa: BLE001
+            print_block(f"Cycle aborted: {e}", kind="error")
+            continue
+
+        for prose in deps.prose_blocks:
+            print_block(prose, kind="prose")
+        for warning in deps.leak_warnings:
+            print_status(warning)
+        if save_path is not None:
+            append_prose(
+                save_path,
+                CycleProseEntry(trigger=line, blocks=list(deps.prose_blocks)),
+            )
+
+
+def _handle_slash(
+    line: str,
+    world: World,
+    sidebar,  # Agent[None, str]
+    save_path: Path | None,
+    *,
+    in_game: bool,
+) -> tuple[bool, Path | None]:
+    """Returns (should_quit, updated_save_path)."""
+    cmd, _, rest = line.partition(" ")
+    match cmd:
+        case "/help":
+            print_block(BANNER, kind="banner")
+        case "/quit" | "/exit":
+            return True, save_path
+        case "/save":
+            if not in_game:
+                print_block(
+                    "Cannot save — the opening scene hasn't started yet.",
+                    kind="error",
                 )
-                continue
-            if line.startswith("/"):
-                output = handle_slash(line, world)
-                kind = "banner" if line == "/help" else "sidebar"
-                _print_block(output, kind=kind)
-            else:
-                output = run_turn(world, line, prior_prose, player_prompts, rng)
-                if _is_status_message(output):
-                    _print_block(
-                        output,
-                        kind="error" if "error" in output.lower() else "status",
-                    )
-                else:
-                    prior_prose.append(output)
-                    player_prompts.append(line)
-                    _print_block(output, kind="prose")
-        except SystemExit:
-            return
+                return False, save_path
+            target = rest.strip()
+            if not target:
+                print_block("Usage: /save <file>", kind="error")
+                return False, save_path
+            path = Path(target)
+            try:
+                save_world(world, path)
+            except OSError as e:
+                print_block(f"Save failed: {e}", kind="error")
+                return False, save_path
+            print_status(f"Saved to {path}. Resume with: autodnd --load {path}")
+            save_path = path
+        case "/hp" | "/log" | "/inv":
+            question = SLASH_QUERIES[cmd]
+            answer = run_sidebar(sidebar, world, question)
+            print_block(answer, kind="prose")
+        case "/ask":
+            question = rest.strip()
+            if not question:
+                print_block("Usage: /ask <question>", kind="error")
+                return False, save_path
+            answer = run_sidebar(sidebar, world, question)
+            print_block(answer, kind="prose")
+        case _:
+            print_block(f"Unknown command: {cmd}. Try /help.", kind="error")
+    return False, save_path
 
 
 if __name__ == "__main__":

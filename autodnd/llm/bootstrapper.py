@@ -1,263 +1,267 @@
-"""Bootstrapper agent: interactive Q&A that mints initial canon.
+"""Interactive Q&A bootstrapper.
 
-Runs before the Director. Asks the player a few focused questions, mints
-locations / threads / NPCs / items / events / player state as decisions firm
-up, then calls ``begin_play`` to hand off to the Director (turn 0). Conversation
-history is threaded across calls via PydanticAI ``message_history``.
-
-Tool surface is intentionally minimal: only what's needed to mint initial
-canon and hand off. No dice (nothing uncertain happens during setup), no
-per-turn mutations (nothing exists yet to mutate).
+Conducts a short interview with the player, minting atoms as their answers
+firm up, and hands off via ``begin_play()`` once a small set of structural
+invariants is satisfied. The handoff is the only gate — when ``begin_play``
+returns an error string, the LLM is expected to fix what is missing and retry.
 """
 
+from __future__ import annotations
+
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models import Model
 
 from autodnd.engine.delta import (
-    ValidationError,
-    apply_add_player_item,
-    apply_advance_narrative_time,
-    apply_append_player_log,
-    apply_create_character,
-    apply_create_item,
-    apply_create_location,
-    apply_create_thread,
-    apply_mint_event,
-    apply_move_player,
-    apply_set_player_gold,
-    apply_update_player_stats,
+    advance_narrative_time as _advance_narrative_time,
+    create_character as _create_character,
+    create_item as _create_item,
+    create_location as _create_location,
+    mint_history as _mint_history,
 )
-from autodnd.engine.world import CharacterStats, WorldModel
-from autodnd.llm import load_prompt, model_from_env
-from autodnd.llm.tracing import end_run, start_run
+from autodnd.engine.world import Abilities, AtLocation, HeldBy, World
+from autodnd.trace import trace_run
+
+
+BOOTSTRAPPER_SYSTEM = """\
+You build the starting state of a fictional world simulator through a short
+interview with the player. Mint atoms via tool calls as their answers firm up.
+Never narrate scene prose. Hand off via begin_play() when the world is playable.
+
+# Cadence
+
+Ask one or two focused questions per turn — setting/tone first, then the
+protagonist hook, then the opening situation. If the player front-loads detail,
+skip ahead and only ask what is still missing. Confirm briefly after each
+cluster of mints. Do not survey; do not bury the player.
+
+# Depth target
+
+Aim for a textured opening, not a sketch:
+- 4-8 locations the campaign could plausibly reach.
+- 4-10 characters total, one of which MUST be `character_id="player"`.
+- 0-6 items, placed at locations or held by characters.
+- 10-25 history records mixing:
+  - cosmic backstory (`participants=[]`) — old wars, conspiracies, omens;
+  - per-character private knowledge (single participant) — secrets, plans,
+    motives, debts, false beliefs;
+  - at least one in-scene beat (multi-participant including `player`) so play
+    has a starting moment.
+
+# Atom rules
+
+- Player MUST use `character_id="player"`. The player is a character, not a
+  separate atom.
+- `Character.description` is PUBLIC-facing identity only — race, appearance,
+  manner, voice, role. NEVER secrets, plans, stances, or private history.
+  Spoilable content lives in private history records with that character as
+  the sole participant.
+- Items use exactly one of `at_location_id` or `held_by_character_id`.
+- History: `participants=[]` is cosmic (no character knows it); single
+  participant is that character's private knowledge; multi-participant means
+  a real beat those characters witnessed together.
+
+# Output discipline
+
+Speak to the player as a DM warming up a table: short, in-character questions
+and brief confirmations. Never expose tool names or schema. Do not write
+opening scene prose — the narrator handles that at first play.
+
+# Handoff
+
+When the world is dense enough and the opening beat is in place, call
+`set_opening_time` and then `begin_play()`. If `begin_play` returns an error,
+read it, mint what is missing, and retry. After `begin_play` returns ok, emit
+one short acknowledgment and stop calling tools.
+"""
+
+
+BOOTSTRAPPER_KICKOFF = (
+    "Start the interview. Ask me a couple of focused questions about the world "
+    "and the character you'll build for me, and mint atoms as my answers firm up."
+)
 
 
 @dataclass
 class BootstrapperDeps:
-    world: WorldModel
+    world: World
+    ready: bool = False
 
 
-def _ok_or_err(err: ValidationError | None) -> str:
-    if err is None:
-        return "ok"
-    return f"error: {err.code} at {err.field_path}: {err.detail}"
-
-
-def build_bootstrapper(model: Model | None = None) -> Agent[BootstrapperDeps, str]:
-    agent = Agent(
-        model or model_from_env(),
+def build_bootstrapper_agent(model: Model) -> Agent[BootstrapperDeps, str]:
+    agent: Agent[BootstrapperDeps, str] = Agent(
+        model,
         deps_type=BootstrapperDeps,
         output_type=str,
-        system_prompt=load_prompt("bootstrapper.md"),
+        system_prompt=BOOTSTRAPPER_SYSTEM,
     )
-
-    # ---------- Creation ----------
 
     @agent.tool
     def create_location(
-        ctx: RunContext[BootstrapperDeps], id: str, name: str, description: str
+        ctx: RunContext[BootstrapperDeps],
+        location_id: str,
+        name: str,
+        description: str,
     ) -> str:
-        """Mint a location the session can reference."""
-        return _ok_or_err(
-            apply_create_location(
-                ctx.deps.world, id=id, name=name, description=description
-            )
+        return _create_location(
+            ctx.deps.world,
+            location_id=location_id,
+            name=name,
+            description=description,
         )
 
     @agent.tool
     def create_character(
         ctx: RunContext[BootstrapperDeps],
-        id: str,
+        character_id: str,
         name: str,
         description: str,
         location_id: str,
-        stats: CharacterStats,
+        hp: int,
+        hp_max: int,
+        ac: int,
+        gold: int = 0,
+        skill_mods: dict[str, int] | None = None,
     ) -> str:
-        """Mint an NPC at a known location. Player state uses player tools."""
-        return _ok_or_err(
-            apply_create_character(
-                ctx.deps.world,
-                id=id,
-                name=name,
-                description=description,
-                location_id=location_id,
-                stats=stats,
-            )
+        return _create_character(
+            ctx.deps.world,
+            character_id=character_id,
+            name=name,
+            description=description,
+            location_id=location_id,
+            hp=hp,
+            hp_max=hp_max,
+            ac=ac,
+            abilities=Abilities(),
+            skill_mods=skill_mods,
+            gold=gold,
         )
 
     @agent.tool
     def create_item(
         ctx: RunContext[BootstrapperDeps],
-        id: str,
+        item_id: str,
         name: str,
         description: str,
-        effects: dict[str, int],
+        at_location_id: str | None = None,
+        held_by_character_id: str | None = None,
+        effects: dict[str, int] | None = None,
     ) -> str:
-        """Mint an item. Effects are mechanical bonuses; description is fictional state."""
-        return _ok_or_err(
-            apply_create_item(
-                ctx.deps.world,
-                id=id,
-                name=name,
-                description=description,
-                effects=effects,
+        if at_location_id is not None and held_by_character_id is not None:
+            return (
+                "error: provide either at_location_id or held_by_character_id, not both"
             )
+        if at_location_id is not None:
+            position = AtLocation(location_id=at_location_id)
+        elif held_by_character_id is not None:
+            position = HeldBy(character_id=held_by_character_id)
+        else:
+            return "error: provide at_location_id or held_by_character_id"
+        return _create_item(
+            ctx.deps.world,
+            item_id=item_id,
+            name=name,
+            description=description,
+            position=position,
+            effects=effects,
         )
 
     @agent.tool
-    def create_thread(
+    def mint_history(
         ctx: RunContext[BootstrapperDeps],
-        id: str,
-        name: str,
-        parent_id: str | None,
-        description: str,
-    ) -> str:
-        """Mint a plot thread. Use `parent_id=None` for a root thread."""
-        return _ok_or_err(
-            apply_create_thread(
-                ctx.deps.world,
-                id=id,
-                name=name,
-                parent_id=parent_id,
-                description=description,
-            )
-        )
-
-    @agent.tool
-    def mint_event(
-        ctx: RunContext[BootstrapperDeps],
-        id: str,
-        narrative_time: str,
-        location_id: str,
         participants: list[str],
         description: str,
-        thread_id: str,
+        location_id: str | None = None,
+        narrative_time: str | None = None,
     ) -> str:
-        """Mint a canonical event. Use for history, discoveries, consequences, or notable changes."""
-        return _ok_or_err(
-            apply_mint_event(
-                ctx.deps.world,
-                id=id,
-                narrative_time=narrative_time,
-                location_id=location_id,
-                participants=participants,
-                description=description,
-                thread_id=thread_id,
-            )
+        return _mint_history(
+            ctx.deps.world,
+            participants=participants,
+            description=description,
+            location_id=location_id,
+            narrative_time=narrative_time,
         )
 
-    # ---------- Player setup ----------
-
     @agent.tool
-    def move_player(ctx: RunContext[BootstrapperDeps], location_id: str) -> str:
-        """Place the player at a known location."""
-        return _ok_or_err(apply_move_player(ctx.deps.world, location_id=location_id))
-
-    @agent.tool
-    def update_player_stats(
-        ctx: RunContext[BootstrapperDeps], stats: CharacterStats
-    ) -> str:
-        """Set player HP, AC, abilities, and mods."""
-        return _ok_or_err(apply_update_player_stats(ctx.deps.world, stats=stats))
-
-    @agent.tool
-    def set_player_gold(ctx: RunContext[BootstrapperDeps], gold: int) -> str:
-        """Set the player's starting gold."""
-        return _ok_or_err(apply_set_player_gold(ctx.deps.world, gold=gold))
-
-    @agent.tool
-    def add_player_item(ctx: RunContext[BootstrapperDeps], item_id: str) -> str:
-        """Add an existing item to the player's inventory."""
-        return _ok_or_err(apply_add_player_item(ctx.deps.world, item_id=item_id))
-
-    @agent.tool
-    def append_player_log(ctx: RunContext[BootstrapperDeps], text: str) -> str:
-        """Append player-facing memory, belief, rumor, or assumption."""
-        return _ok_or_err(apply_append_player_log(ctx.deps.world, text=text))
-
-    @agent.tool
-    def advance_narrative_time(ctx: RunContext[BootstrapperDeps], to: str) -> str:
-        """Set the opening fictional time (free-text, e.g. 'Day 1, dusk'). Required
-        before begin_play so the Director has a clock to advance."""
-        return _ok_or_err(apply_advance_narrative_time(ctx.deps.world, to=to))
-
-    # ---------- Handoff ----------
+    def set_opening_time(ctx: RunContext[BootstrapperDeps], new_time: str) -> str:
+        """Set the opening fictional time (e.g. 'Day 1, dusk'). Required before begin_play."""
+        return _advance_narrative_time(ctx.deps.world, new_time=new_time)
 
     @agent.tool
     def begin_play(ctx: RunContext[BootstrapperDeps]) -> str:
-        """Hand off to the Director and start turn 0. Requires location, thread,
-        event, player location, positive HP, and a set narrative_time."""
+        """Hand off to play. Returns an error string if structural invariants are unmet."""
         world = ctx.deps.world
         missing: list[str] = []
         if not world.locations:
-            missing.append("no locations (call create_location)")
-        if not world.threads:
-            missing.append("no threads (call create_thread)")
-        if not world.events:
-            missing.append("no events (call mint_event)")
-        if not world.player.location_id:
-            missing.append("player has no location_id (call move_player)")
-        if world.player.stats.hp <= 0:
-            missing.append("player hp <= 0 (call update_player_stats)")
-        if not world.narrative_time:
-            missing.append("narrative_time empty (call advance_narrative_time)")
+            missing.append("no locations created")
+        player = world.characters.get("player")
+        if player is None:
+            missing.append("player character not created (use character_id='player')")
+        else:
+            if player.hp <= 0:
+                missing.append("player hp is 0 — start the player with positive hp")
+            if player.location_id not in world.locations:
+                missing.append("player's location is unknown")
+        if not any(
+            h.location_id is not None and "player" in h.participants
+            for h in world.history
+        ):
+            missing.append(
+                "no opening scene history — mint a history record with the "
+                "player as participant and a location set"
+            )
+        if world.narrative_time == "Day 1, dawn":
+            missing.append(
+                "narrative time is still the default — call set_opening_time"
+            )
         if missing:
-            return "error: cannot begin_play yet — " + "; ".join(missing)
-        world.turn = 0
-        return "ok"
+            return "error: cannot begin play — " + "; ".join(missing)
+        ctx.deps.ready = True
+        return "ok: ready for play"
 
     return agent
 
 
-# ---------- User-message templates ----------
-
-
-def bootstrap_user_message() -> str:
-    return (
-        "Start a solo D&D 5e one-shot setup. Ask the first focused question to "
-        "settle the player character, tone, and opening premise. As answers firm "
-        "up, mint canon, set starting gold, and call `begin_play` when the world is ready."
-    )
-
-
-# ---------- Driver ----------
-
-
 def run_bootstrapper(
-    world: WorldModel,
-    user_message: str,
+    agent: Agent[BootstrapperDeps, str],
+    world: World,
     *,
-    model: Model | None = None,
-    message_history: list[ModelMessage] | None = None,
-) -> tuple[str, list[ModelMessage]]:
-    """Run one Bootstrapper turn. Returns ``(prose, all_messages)``. Pass
-    ``all_messages`` from the previous call as ``message_history`` to thread
-    the conversation."""
-    agent = build_bootstrapper(model)
+    read_input: Callable[[], str | None],
+    on_agent_message: Callable[[str], None],
+    max_turns: int = 24,
+) -> bool:
+    """Run the bootstrapper as a multi-turn interview.
+
+    Each turn the agent's text output is forwarded to ``on_agent_message`` and
+    the next player line is fetched via ``read_input``. Empty input or ``None``
+    (EOF) aborts. Returns True iff ``begin_play()`` succeeded.
+    """
     deps = BootstrapperDeps(world=world)
-    start = time.monotonic()
-    step = start_run(agent="bootstrapper", world_turn=world.turn)
-    result = agent.run_sync(user_message, deps=deps, message_history=message_history)
-    end_run(
-        step=step,
-        agent="bootstrapper",
-        world_turn=world.turn,
-        result=result,
-        latency_ms=(time.monotonic() - start) * 1000,
-    )
-    final_response: ModelResponse | None = None
-    for msg in result.all_messages():
-        if isinstance(msg, ModelResponse):
-            final_response = msg
-    prose = ""
-    if final_response is not None:
-        prose = "\n\n".join(
-            part.content
-            for part in final_response.parts
-            if isinstance(part, TextPart) and part.content
+    history: list[ModelMessage] = []
+    user_input = BOOTSTRAPPER_KICKOFF
+
+    for turn_idx in range(max_turns):
+        start = time.perf_counter()
+        result = agent.run_sync(user_input, deps=deps, message_history=history or None)
+        trace_run(
+            f"bootstrapper.t{turn_idx}",
+            result,
+            (time.perf_counter() - start) * 1000,
         )
-    return prose, list(result.all_messages())
+        history = list(result.all_messages())
+
+        if result.output and result.output.strip():
+            on_agent_message(result.output)
+        if deps.ready:
+            return True
+
+        next_line = read_input()
+        if not next_line:
+            return False
+        user_input = next_line
+
+    return False

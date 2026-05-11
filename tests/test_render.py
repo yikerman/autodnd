@@ -1,182 +1,145 @@
-"""Smoke tests for engine.render.render_omniscient.
+"""Renderers: determinism + the per-character firewall.
 
-Pin down structural invariants the Director's prompt depends on (sections
-present, names resolved instead of raw ids, deterministic ordering, player
-log timeline rendered).
+The firewall is the load-bearing test of this layer: ``render_for_character``
+must NEVER include a history record where the character is not in
+``participants``. Any leakage here propagates to the LLM prompt.
 """
 
-from autodnd.engine.delta import (
-    apply_add_player_item,
-    apply_advance_narrative_time,
-    apply_append_player_log,
-    apply_create_character,
-    apply_create_item,
-    apply_create_location,
-    apply_create_thread,
-    apply_mint_event,
-    apply_move_player,
-    apply_set_player_gold,
-    apply_update_player_stats,
+from __future__ import annotations
+
+from autodnd.engine.delta import mint_history
+from autodnd.engine.render import (
+    render_arbiter,
+    render_for_character,
+    render_for_narrator,
+    render_for_player,
 )
-from autodnd.engine.render import render_omniscient
-from autodnd.engine.world import (
-    CharacterStats,
-    PlayerState,
-    WorldModel,
-)
+from autodnd.engine.world import World
+from autodnd.fixtures import vale_inn
 
 
-def _empty_world() -> WorldModel:
-    return WorldModel(
-        player=PlayerState(location_id="", stats=CharacterStats(hp=0, ac=0)),
-        turn=-1,
+def _world() -> World:
+    w = World()
+    vale_inn(w)
+    return w
+
+
+# ---------- Determinism ----------
+
+
+def test_render_for_player_deterministic() -> None:
+    w = _world()
+    assert render_for_player(w) == render_for_player(w)
+
+
+def test_render_for_character_deterministic() -> None:
+    w = _world()
+    assert render_for_character(w, "brona") == render_for_character(w, "brona")
+
+
+def test_render_for_narrator_deterministic() -> None:
+    w = _world()
+    assert render_for_narrator(w) == render_for_narrator(w)
+
+
+def test_render_arbiter_deterministic() -> None:
+    w = _world()
+    assert render_arbiter(w, "trigger") == render_arbiter(w, "trigger")
+
+
+# ---------- Firewall ----------
+
+
+def test_brona_render_omits_player_private_thought() -> None:
+    """The fixture has a player-only thought. Brona's render must not contain it."""
+    w = _world()
+    _system, user = render_for_character(w, "brona")
+    assert "thought about the road ahead" not in user
+    assert "restless" not in user
+
+
+def test_player_render_omits_brona_private_resolution() -> None:
+    """Brona's private resolution must not appear in player-facing renders."""
+    w = _world()
+    rendered = render_for_player(w)
+    assert "send word to Korel" not in rendered
+    assert "fits the description" not in rendered
+
+
+def test_brona_render_includes_her_own_resolution() -> None:
+    """Brona DOES see her own private resolution."""
+    w = _world()
+    _system, user = render_for_character(w, "brona")
+    assert "send word to Korel" in user
+
+
+def test_player_render_includes_player_thought() -> None:
+    w = _world()
+    rendered = render_for_player(w)
+    assert "thought about the road ahead" in rendered
+
+
+def test_render_for_character_excludes_records_where_char_not_in_participants() -> None:
+    """Adversarial: mint a third-party private record, ensure neither sees it."""
+    w = _world()
+    # Add a third character so we have someone uninvolved.
+    from autodnd.engine.delta import create_character
+
+    create_character(
+        w,
+        character_id="thrag",
+        name="Thrag",
+        description="An orc scout, scarred and watchful.",
+        location_id="vale_inn",
+        hp=12,
+        hp_max=12,
+        ac=13,
     )
-
-
-def _bootstrapped_world() -> WorldModel:
-    world = _empty_world()
-    apply_create_location(
-        world, id="inn", name="Crow's Foot Inn", description="Roadside inn at dusk."
+    # Mint a record only Thrag knows.
+    mint_history(
+        w,
+        participants=["thrag"],
+        description="Thrag noticed the player's posture and recognized the gait of an elf-trained scout.",
+        location_id="vale_inn",
     )
-    apply_create_location(
-        world, id="cap", name="Vellor capital", description="Walled city."
-    )
-    apply_create_thread(
-        world,
-        id="root",
-        name="root arc",
-        parent_id=None,
-        description="Setting tension.",
-    )
-    apply_create_thread(
-        world,
-        id="inn_night",
-        name="Night at the inn",
-        parent_id="root",
-        description="Mara stops over.",
-    )
-    apply_create_character(
-        world,
-        id="hadrian",
-        name="Hadrian",
-        description="Innkeeper.",
-        location_id="inn",
-        stats=CharacterStats(hp=14, ac=11),
-    )
-    apply_create_item(world, id="sword", name="shortsword", description="Plain blade.")
-    apply_mint_event(
-        world,
-        id="e0",
-        narrative_time="year 1043",
-        location_id="cap",
-        participants=[],
-        description="Treaty signed.",
-        thread_id="root",
-    )
-    apply_mint_event(
-        world,
-        id="e1",
-        narrative_time="today, dusk",
-        location_id="inn",
-        participants=["hadrian"],
-        description="Mara arrived at the inn.",
-        thread_id="inn_night",
-    )
-    apply_move_player(world, location_id="inn")
-    apply_update_player_stats(
-        world, stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2})
-    )
-    apply_set_player_gold(world, gold=50)
-    apply_add_player_item(world, item_id="sword")
-    apply_append_player_log(world, text="You reached the inn at dusk.")
-    apply_append_player_log(world, text="You assume the kingdom is at peace.")
-    apply_advance_narrative_time(world, to="today, dusk")
-    world.turn = 0
-    return world
+    # Brona must not see it.
+    _system, brona_view = render_for_character(w, "brona")
+    assert "elf-trained" not in brona_view
+    assert "recognized" not in brona_view
+    # Player must not see it.
+    player_view = render_for_player(w)
+    assert "elf-trained" not in player_view
+    # Thrag DOES see it.
+    _system, thrag_view = render_for_character(w, "thrag")
+    assert "elf-trained" in thrag_view
 
 
-def test_render_includes_top_level_sections():
-    out = render_omniscient(_bootstrapped_world())
-    for header in (
-        "# World (turn 0)",
-        "## Threads",
-        "## Characters",
-        "## Locations",
-        "## Items",
-        "## Player",
-    ):
-        assert header in out, f"missing section: {header!r}"
+# ---------- Other-character descriptions in scene are public-safe ----------
 
 
-def test_render_resolves_names_not_just_ids():
-    out = render_omniscient(_bootstrapped_world())
-    assert "Hadrian" in out
-    assert "Crow's Foot Inn" in out
-    assert "Vellor capital" in out
-    assert "(with Hadrian)" in out
+def test_brona_render_includes_player_public_description() -> None:
+    """Descriptions are public-only by commitment, so safe to include in scene."""
+    w = _world()
+    _system, user = render_for_character(w, "brona")
+    # Player's description should appear in "Present in this scene".
+    assert "wandering scout" in user
 
 
-def test_render_thread_nesting_is_depth_first():
-    out = render_omniscient(_bootstrapped_world())
-    root_idx = out.index("`root` — root arc")
-    child_idx = out.index("`inn_night` — Night at the inn")
-    assert root_idx < child_idx
-    assert "#### `inn_night`" in out
-    assert "### `root`" in out
+# ---------- Arbiter sees everything ----------
 
 
-def test_render_player_log_appears_in_order():
-    out = render_omniscient(_bootstrapped_world())
-    assert "Player log" in out
-    inn_idx = out.index("You reached the inn at dusk.")
-    assume_idx = out.index("You assume the kingdom is at peace.")
-    assert inn_idx < assume_idx
+def test_arbiter_sees_all_history() -> None:
+    w = _world()
+    _system, user = render_arbiter(w, "trigger")
+    assert "send word to Korel" in user  # Brona's private resolution
+    assert "thought about the road ahead" in user  # Player's private thought
 
 
-def test_render_player_section_shows_stats_and_items():
-    out = render_omniscient(_bootstrapped_world())
-    assert "HP 24, AC 13" in out
-    assert "Gold: 50" in out
-    assert "persuasion+2" in out
-    assert "`sword`" in out
+# ---------- Narrator scope ----------
 
 
-def test_render_empty_world():
-    out = render_omniscient(_empty_world())
-    assert "# World (turn -1)" in out
-    assert "(no threads)" in out
-    assert "(none)" in out  # locations / characters / items / player.log
-
-
-def test_render_shows_world_clock_when_set():
-    out = render_omniscient(_bootstrapped_world())
-    assert "Now: today, dusk" in out
-
-
-def test_render_shows_unset_clock_on_empty_world():
-    out = render_omniscient(_empty_world())
-    assert "Now: (unset)" in out
-
-
-def test_render_shows_last_event_per_thread_with_events():
-    out = render_omniscient(_bootstrapped_world())
-    # Thread `inn_night` has one event at "today, dusk".
-    assert "Last event: today, dusk" in out
-
-
-def test_render_omits_last_event_for_threads_without_events():
-    """A thread with no events should not produce a 'Last event:' line."""
-    world = _empty_world()
-    apply_create_thread(
-        world, id="quiet", name="Quiet", parent_id=None, description="Nothing yet."
-    )
-    out = render_omniscient(world)
-    # The thread renders, but no "Last event:" line for it.
-    assert "`quiet`" in out
-    assert "Last event:" not in out
-
-
-def test_render_is_deterministic():
-    a = render_omniscient(_bootstrapped_world())
-    b = render_omniscient(_bootstrapped_world())
-    assert a == b
+def test_narrator_sees_player_perceived_history_only() -> None:
+    w = _world()
+    _system, user = render_for_narrator(w)
+    # Brona's resolution: player not in participants → not in narrator view.
+    assert "send word to Korel" not in user

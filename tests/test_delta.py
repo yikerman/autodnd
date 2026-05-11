@@ -1,523 +1,307 @@
-"""Tests for engine.delta per-mutation validators and appliers."""
+"""Closed mutation API: validation paths and happy paths.
 
-import pytest
+Each delta should return ``"ok: ..."`` on success and ``"error: ..."`` on
+failure with the world unchanged.
+"""
+
+from __future__ import annotations
 
 from autodnd.engine.delta import (
-    apply_add_player_item,
-    apply_advance_narrative_time,
-    apply_append_player_log,
-    apply_create_character,
-    apply_create_item,
-    apply_create_location,
-    apply_create_thread,
-    apply_mint_event,
-    apply_move_character,
-    apply_move_player,
-    apply_remove_player_item,
-    apply_gain_player_gold,
-    apply_set_player_gold,
-    apply_spend_player_gold,
-    apply_update_character_stats,
-    apply_update_item_description,
-    apply_update_player_stats,
-    apply_update_thread_description,
+    advance_narrative_time,
+    create_character,
+    create_item,
+    create_location,
+    mint_history,
+    move,
+    transfer_item,
+    update_item_description,
+    update_stats,
 )
-from autodnd.engine.world import (
-    CharacterStats,
-    PlayerState,
-    WorldModel,
-)
+from autodnd.engine.world import AtLocation, HeldBy, World
 
 
-def _empty_world() -> WorldModel:
-    return WorldModel(
-        player=PlayerState(location_id="", stats=CharacterStats(hp=0, ac=0)),
-        turn=-1,
+def _seeded() -> World:
+    w = World()
+    create_location(w, location_id="inn", name="Inn", description="warm")
+    create_location(w, location_id="road", name="Road", description="dusty")
+    create_character(
+        w,
+        character_id="player",
+        name="Fox",
+        description="scout",
+        location_id="inn",
+        hp=10,
+        hp_max=10,
+        ac=12,
     )
-
-
-def _seeded_world() -> WorldModel:
-    """Small world: 2 locations, 2 threads, 1 character, 1 item, 1 event already minted,
-    player at the inn with the sword and a persuasion mod."""
-    world = _empty_world()
-    assert (
-        apply_create_location(
-            world, id="inn", name="Inn", description="A roadside inn."
-        )
-        is None
+    create_character(
+        w,
+        character_id="brona",
+        name="Brona",
+        description="tavern-keeper",
+        location_id="inn",
+        hp=8,
+        hp_max=8,
+        ac=10,
     )
-    assert (
-        apply_create_location(
-            world, id="cap", name="Capital", description="Walled city."
-        )
-        is None
-    )
-    assert (
-        apply_create_thread(
-            world, id="root", name="root arc", parent_id=None, description="..."
-        )
-        is None
-    )
-    assert (
-        apply_create_thread(
-            world,
-            id="inn_night",
-            name="Inn night",
-            parent_id="root",
-            description="...",
-        )
-        is None
-    )
-    assert (
-        apply_create_character(
-            world,
-            id="hadrian",
-            name="Hadrian",
-            description="Innkeeper.",
-            location_id="inn",
-            stats=CharacterStats(hp=14, ac=11),
-        )
-        is None
-    )
-    assert (
-        apply_create_item(
-            world, id="sword", name="shortsword", description="Plain blade."
-        )
-        is None
-    )
-    assert (
-        apply_mint_event(
-            world,
-            id="e0",
-            narrative_time="year 1043",
-            location_id="cap",
-            participants=[],
-            description="Treaty signed.",
-            thread_id="root",
-        )
-        is None
-    )
-    assert apply_move_player(world, location_id="inn") is None
-    assert (
-        apply_update_player_stats(
-            world, stats=CharacterStats(hp=24, ac=13, mods={"persuasion": 2})
-        )
-        is None
-    )
-    assert apply_add_player_item(world, item_id="sword") is None
-    return world
+    return w
 
 
-# ---------- Creation ----------
+# ---------- create_location ----------
 
 
-def test_create_location_minted_into_world():
-    world = _empty_world()
-    err = apply_create_location(world, id="inn", name="Inn", description="...")
-    assert err is None
-    assert world.locations["inn"].name == "Inn"
+def test_create_location_happy() -> None:
+    w = World()
+    assert create_location(
+        w, location_id="inn", name="Inn", description="warm"
+    ).startswith("ok:")
+    assert "inn" in w.locations
 
 
-def test_create_location_rejects_duplicate():
-    world = _seeded_world()
-    err = apply_create_location(world, id="inn", name="Other", description="...")
-    assert err is not None
-    assert err.code == "duplicate_id"
+def test_create_location_duplicate_rejected() -> None:
+    w = _seeded()
+    result = create_location(w, location_id="inn", name="Inn2", description="x")
+    assert result.startswith("error:")
+    assert w.locations["inn"].name == "Inn"  # unchanged
 
 
-def test_create_character_rejects_unknown_location():
-    world = _empty_world()
-    err = apply_create_character(
-        world,
-        id="ghost",
-        name="Ghost",
-        description="...",
+# ---------- create_character ----------
+
+
+def test_create_character_unknown_location_rejected() -> None:
+    w = _seeded()
+    result = create_character(
+        w,
+        character_id="ghost",
+        name="g",
+        description="x",
         location_id="nowhere",
-        stats=CharacterStats(hp=1, ac=10),
+        hp=1,
+        hp_max=1,
+        ac=10,
     )
-    assert err is not None
-    assert err.code == "unknown_ref"
-    assert "location" in err.detail
+    assert result.startswith("error:")
+    assert "ghost" not in w.characters
 
 
-def test_create_character_rejects_duplicate():
-    world = _seeded_world()
-    err = apply_create_character(
-        world,
-        id="hadrian",
-        name="Other",
-        description="...",
+def test_create_character_invalid_hp_rejected() -> None:
+    w = _seeded()
+    result = create_character(
+        w,
+        character_id="x",
+        name="x",
+        description="x",
         location_id="inn",
-        stats=CharacterStats(hp=1, ac=10),
+        hp=15,
+        hp_max=10,
+        ac=10,
     )
-    assert err is not None
-    assert err.code == "duplicate_id"
+    assert result.startswith("error:")
+    assert "x" not in w.characters
 
 
-def test_create_thread_rejects_unknown_parent():
-    world = _empty_world()
-    err = apply_create_thread(
-        world, id="child", name="Child", parent_id="phantom", description="..."
-    )
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_create_thread_root_is_ok_without_parent():
-    world = _empty_world()
-    err = apply_create_thread(
-        world, id="root", name="Root", parent_id=None, description="..."
-    )
-    assert err is None
-    assert world.threads["root"].parent_id is None
-
-
-def test_create_item_with_effects():
-    world = _empty_world()
-    err = apply_create_item(
-        world,
-        id="persuasion_skill",
-        name="persuasion",
-        description="trained.",
-        effects={"persuasion": 2},
-    )
-    assert err is None
-    assert world.items["persuasion_skill"].effects["persuasion"] == 2
-
-
-def test_create_item_defaults_effects_to_empty():
-    world = _empty_world()
-    err = apply_create_item(world, id="sword", name="sword", description="plain.")
-    assert err is None
-    assert world.items["sword"].effects == {}
-
-
-# ---------- mint_event ----------
-
-
-def test_mint_event_assigns_t_monotonically():
-    world = _seeded_world()  # already minted e0 at t=0
-    assert world.events["e0"].t == 0
-    assert world.next_event_t == 1
-    err = apply_mint_event(
-        world,
-        id="e1",
-        narrative_time="dusk",
+def test_create_character_negative_gold_rejected() -> None:
+    w = _seeded()
+    result = create_character(
+        w,
+        character_id="x",
+        name="x",
+        description="x",
         location_id="inn",
-        participants=["hadrian"],
-        description="...",
-        thread_id="inn_night",
+        hp=1,
+        hp_max=1,
+        ac=10,
+        gold=-1,
     )
-    assert err is None
-    assert world.events["e1"].t == 1
-    assert world.next_event_t == 2
+    assert result.startswith("error:")
 
 
-def test_mint_event_rejects_duplicate_id():
-    world = _seeded_world()
-    err = apply_mint_event(
-        world,
-        id="e0",
-        narrative_time="now",
-        location_id="inn",
+# ---------- create_item ----------
+
+
+def test_create_item_at_unknown_location_rejected() -> None:
+    w = _seeded()
+    result = create_item(
+        w,
+        item_id="rock",
+        name="rock",
+        description="a rock",
+        position=AtLocation(location_id="nowhere"),
+    )
+    assert result.startswith("error:")
+
+
+def test_create_item_held_by_unknown_character_rejected() -> None:
+    w = _seeded()
+    result = create_item(
+        w,
+        item_id="rock",
+        name="rock",
+        description="x",
+        position=HeldBy(character_id="ghost"),
+    )
+    assert result.startswith("error:")
+
+
+def test_create_item_happy() -> None:
+    w = _seeded()
+    result = create_item(
+        w,
+        item_id="sword",
+        name="sword",
+        description="sharp",
+        position=HeldBy(character_id="player"),
+        effects={"attack": 4},
+    )
+    assert result.startswith("ok:")
+    assert w.items["sword"].effects == {"attack": 4}
+
+
+# ---------- mint_history ----------
+
+
+def test_mint_history_assigns_monotonic_t() -> None:
+    w = _seeded()
+    assert mint_history(w, participants=["player"], description="a").startswith("ok:")
+    assert mint_history(w, participants=["brona"], description="b").startswith("ok:")
+    assert [r.t for r in w.history] == [0, 1]
+    assert w.next_t == 2
+
+
+def test_mint_history_unknown_participant_rejected() -> None:
+    w = _seeded()
+    result = mint_history(w, participants=["ghost"], description="x")
+    assert result.startswith("error:")
+    assert w.history == []
+
+
+def test_mint_history_default_narrative_time() -> None:
+    w = _seeded()
+    advance_narrative_time(w, new_time="Day 2, dusk")
+    mint_history(w, participants=["player"], description="x")
+    assert w.history[0].narrative_time == "Day 2, dusk"
+
+
+def test_mint_history_empty_participants_ok() -> None:
+    """Cosmic happenings nobody knows are valid."""
+    w = _seeded()
+    result = mint_history(
+        w,
         participants=[],
-        description="...",
-        thread_id="root",
+        description="The dragon stirred beneath the mountain.",
     )
-    assert err is not None
-    assert err.code == "duplicate_id"
-    # next_event_t should NOT advance on rejection
-    assert world.next_event_t == 1
+    assert result.startswith("ok:")
+    assert w.history[0].participants == []
 
 
-def test_mint_event_rejects_unknown_participant():
-    world = _seeded_world()
-    err = apply_mint_event(
-        world,
-        id="e_x",
-        narrative_time="now",
-        location_id="inn",
-        participants=["ghost"],
-        description="...",
-        thread_id="inn_night",
+# ---------- move ----------
+
+
+def test_move_happy() -> None:
+    w = _seeded()
+    assert move(w, character_id="player", location_id="road").startswith("ok:")
+    assert w.characters["player"].location_id == "road"
+
+
+def test_move_unknown_location_rejected() -> None:
+    w = _seeded()
+    assert move(w, character_id="player", location_id="nowhere").startswith("error:")
+    assert w.characters["player"].location_id == "inn"
+
+
+# ---------- update_stats ----------
+
+
+def test_update_stats_partial_change() -> None:
+    w = _seeded()
+    update_stats(w, character_id="player", hp=5, gold=10)
+    assert w.characters["player"].hp == 5
+    assert w.characters["player"].gold == 10
+    assert w.characters["player"].ac == 12  # unchanged
+
+
+def test_update_stats_clamps_when_lowering_hp_max() -> None:
+    w = _seeded()
+    # player has hp=10, hp_max=10
+    update_stats(w, character_id="player", hp_max=5)
+    assert w.characters["player"].hp_max == 5
+    assert w.characters["player"].hp == 5  # clamped
+
+
+def test_update_stats_rejects_hp_above_max() -> None:
+    w = _seeded()
+    result = update_stats(w, character_id="player", hp=999)
+    assert result.startswith("error:")
+    assert w.characters["player"].hp == 10
+
+
+def test_update_stats_rejects_negative() -> None:
+    w = _seeded()
+    assert update_stats(w, character_id="player", gold=-1).startswith("error:")
+    assert update_stats(w, character_id="player", hp=-1).startswith("error:")
+    assert update_stats(w, character_id="player", ac=-1).startswith("error:")
+
+
+# ---------- transfer_item ----------
+
+
+def test_transfer_item_happy() -> None:
+    w = _seeded()
+    create_item(
+        w,
+        item_id="sword",
+        name="sword",
+        description="x",
+        position=HeldBy(character_id="player"),
     )
-    assert err is not None
-    assert err.code == "unknown_ref"
-    assert "ghost" in err.detail
+    assert transfer_item(
+        w, item_id="sword", to=HeldBy(character_id="brona")
+    ).startswith("ok:")
+    assert isinstance(w.items["sword"].position, HeldBy)
+    assert w.items["sword"].position.character_id == "brona"
 
 
-def test_mint_event_rejects_unknown_thread():
-    world = _seeded_world()
-    err = apply_mint_event(
-        world,
-        id="e_x",
-        narrative_time="now",
-        location_id="inn",
-        participants=[],
-        description="...",
-        thread_id="phantom",
+def test_transfer_item_to_unknown_rejected() -> None:
+    w = _seeded()
+    create_item(
+        w,
+        item_id="sword",
+        name="sword",
+        description="x",
+        position=HeldBy(character_id="player"),
     )
-    assert err is not None
-    assert err.code == "unknown_ref"
+    assert transfer_item(
+        w, item_id="sword", to=HeldBy(character_id="ghost")
+    ).startswith("error:")
 
 
-def test_mint_event_rejects_unknown_location():
-    world = _seeded_world()
-    err = apply_mint_event(
-        world,
-        id="e_x",
-        narrative_time="now",
-        location_id="nowhere",
-        participants=[],
-        description="...",
-        thread_id="inn_night",
+# ---------- update_item_description ----------
+
+
+def test_update_item_description_happy() -> None:
+    w = _seeded()
+    create_item(
+        w,
+        item_id="sword",
+        name="sword",
+        description="plain",
+        position=HeldBy(character_id="player"),
     )
-    assert err is not None
-    assert err.code == "unknown_ref"
+    update_item_description(w, item_id="sword", description="now carved with FOX")
+    assert w.items["sword"].description == "now carved with FOX"
 
 
-# ---------- Mutation ----------
+# ---------- advance_narrative_time ----------
 
 
-def test_update_thread_description():
-    world = _seeded_world()
-    err = apply_update_thread_description(
-        world, id="inn_night", description="Hadrian has decided to betray Mara."
-    )
-    assert err is None
-    assert world.threads["inn_night"].description.startswith("Hadrian")
+def test_advance_narrative_time_happy() -> None:
+    w = _seeded()
+    advance_narrative_time(w, new_time="Day 2, dawn")
+    assert w.narrative_time == "Day 2, dawn"
 
 
-def test_update_thread_description_rejects_unknown():
-    world = _empty_world()
-    err = apply_update_thread_description(world, id="ghost", description="...")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_update_item_description():
-    world = _seeded_world()
-    err = apply_update_item_description(world, id="sword", description="Bloodied.")
-    assert err is None
-    assert world.items["sword"].description == "Bloodied."
-
-
-def test_update_item_description_rejects_unknown():
-    world = _empty_world()
-    err = apply_update_item_description(world, id="ghost", description="...")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_move_character():
-    world = _seeded_world()
-    err = apply_move_character(world, id="hadrian", location_id="cap")
-    assert err is None
-    assert world.characters["hadrian"].location_id == "cap"
-
-
-def test_move_character_rejects_unknown_character():
-    world = _empty_world()
-    err = apply_move_character(world, id="ghost", location_id="anywhere")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_move_character_rejects_unknown_location():
-    world = _seeded_world()
-    err = apply_move_character(world, id="hadrian", location_id="nowhere")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_update_character_stats():
-    world = _seeded_world()
-    err = apply_update_character_stats(
-        world, id="hadrian", stats=CharacterStats(hp=8, ac=11)
-    )
-    assert err is None
-    assert world.characters["hadrian"].stats.hp == 8
-
-
-def test_update_character_stats_rejects_unknown():
-    world = _empty_world()
-    err = apply_update_character_stats(
-        world, id="ghost", stats=CharacterStats(hp=1, ac=10)
-    )
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_move_player():
-    world = _seeded_world()
-    err = apply_move_player(world, location_id="cap")
-    assert err is None
-    assert world.player.location_id == "cap"
-
-
-def test_move_player_rejects_unknown_location():
-    world = _empty_world()
-    err = apply_move_player(world, location_id="nowhere")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_update_player_stats():
-    world = _seeded_world()
-    err = apply_update_player_stats(world, stats=CharacterStats(hp=10, ac=13))
-    assert err is None
-    assert world.player.stats.hp == 10
-
-
-def test_set_player_gold():
-    world = _seeded_world()
-    err = apply_set_player_gold(world, gold=12)
-    assert err is None
-    assert world.player.gold == 12
-
-
-def test_set_player_gold_rejects_negative():
-    world = _seeded_world()
-    err = apply_set_player_gold(world, gold=-1)
-    assert err is not None
-    assert err.code == "invalid_amount"
-    assert world.player.gold == 0
-
-
-def test_gain_player_gold():
-    world = _seeded_world()
-    apply_set_player_gold(world, gold=3)
-    err = apply_gain_player_gold(world, amount=7)
-    assert err is None
-    assert world.player.gold == 10
-
-
-def test_gain_player_gold_rejects_negative():
-    world = _seeded_world()
-    err = apply_gain_player_gold(world, amount=-1)
-    assert err is not None
-    assert err.code == "invalid_amount"
-    assert world.player.gold == 0
-
-
-def test_spend_player_gold():
-    world = _seeded_world()
-    apply_set_player_gold(world, gold=10)
-    err = apply_spend_player_gold(world, amount=4)
-    assert err is None
-    assert world.player.gold == 6
-
-
-def test_spend_player_gold_rejects_negative():
-    world = _seeded_world()
-    apply_set_player_gold(world, gold=10)
-    err = apply_spend_player_gold(world, amount=-1)
-    assert err is not None
-    assert err.code == "invalid_amount"
-    assert world.player.gold == 10
-
-
-def test_spend_player_gold_rejects_insufficient_funds():
-    world = _seeded_world()
-    apply_set_player_gold(world, gold=3)
-    err = apply_spend_player_gold(world, amount=4)
-    assert err is not None
-    assert err.code == "insufficient_funds"
-    assert world.player.gold == 3
-
-
-def test_add_player_item():
-    world = _seeded_world()
-    apply_create_item(world, id="lantern", name="lantern", description="dim.")
-    err = apply_add_player_item(world, item_id="lantern")
-    assert err is None
-    assert "lantern" in world.player.items
-
-
-def test_add_player_item_rejects_unknown():
-    world = _empty_world()
-    err = apply_add_player_item(world, item_id="phantom")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_add_player_item_rejects_duplicate():
-    world = _seeded_world()  # already has "sword"
-    err = apply_add_player_item(world, item_id="sword")
-    assert err is not None
-    assert err.code == "duplicate_id"
-
-
-def test_remove_player_item():
-    world = _seeded_world()
-    err = apply_remove_player_item(world, item_id="sword")
-    assert err is None
-    assert "sword" not in world.player.items
-
-
-def test_remove_player_item_rejects_not_held():
-    world = _seeded_world()
-    err = apply_remove_player_item(world, item_id="phantom")
-    assert err is not None
-    assert err.code == "unknown_ref"
-
-
-def test_append_player_log():
-    world = _empty_world()
-    err = apply_append_player_log(world, text="You arrived.")
-    assert err is None
-    assert world.player.log == ["You arrived."]
-
-
-def test_advance_narrative_time_sets_world_clock():
-    world = _empty_world()
-    assert world.narrative_time == ""
-    err = apply_advance_narrative_time(world, to="Day 3, dusk")
-    assert err is None
-    assert world.narrative_time == "Day 3, dusk"
-
-
-def test_advance_narrative_time_rejects_empty():
-    world = _empty_world()
-    err = apply_advance_narrative_time(world, to="   ")
-    assert err is not None
-    assert err.code == "schema_invalid"
-    assert world.narrative_time == ""
-
-
-# ---------- Sequencing: create-then-reference within a turn ----------
-
-
-def test_create_then_reference_within_turn():
-    """An entity created mid-turn is immediately available to subsequent calls.
-    No more all-or-nothing atomicity — tool calls compose freely."""
-    world = _empty_world()
-    apply_create_location(world, id="inn", name="Inn", description="...")
-    apply_create_thread(world, id="t", name="t", parent_id=None, description="...")
-    err = apply_create_character(
-        world,
-        id="h",
-        name="H",
-        description="...",
-        location_id="inn",
-        stats=CharacterStats(hp=10, ac=10),
-    )
-    assert err is None
-    err = apply_mint_event(
-        world,
-        id="e",
-        narrative_time="now",
-        location_id="inn",
-        participants=["h"],
-        description="...",
-        thread_id="t",
-    )
-    assert err is None
-    assert world.events["e"].t == 0
-
-
-# ---------- Marker for pytest discovery ----------
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_advance_narrative_time_empty_rejected() -> None:
+    w = _seeded()
+    result = advance_narrative_time(w, new_time="   ")
+    assert result.startswith("error:")
+    assert w.narrative_time == "Day 1, dawn"

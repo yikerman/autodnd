@@ -1,129 +1,101 @@
-"""Deterministic dice / check / attack / save / damage primitives.
+"""Dice mechanics. Deterministic given an injected RNG.
 
-RNG is injected — every function takes ``rng: random.Random`` so tests can
-seed for repeatability and the Director's tool calls produce the exact
-results the validator and Narrator will see.
-
-Lightweight 5e:
-- d20 + modifier vs DC for checks and saves
-- d20 + attack_mod vs target AC for attacks
-- nat 20 = critical_success, nat 1 = critical_failure (both on the d20 face)
-- damage clamps HP at 0 (no negative HP)
-
-Spell mechanics, action economy, and RAW initiative are out of scope.
+Free-form rolls return ints; skill checks / attacks / saves return `Resolution`.
+The arbiter calls these tools and embeds the outcome into a minted history record.
 """
+
+from __future__ import annotations
 
 import random
 import re
-from collections.abc import Iterable, Mapping
 
-from autodnd.engine.resolution import Resolution
-from autodnd.engine.world import CharacterStats, Item
+from autodnd.engine.resolution import Outcome, Resolution
 
-_DICE_SPEC = re.compile(r"^\s*(\d*)d(\d+)\s*([+-]\s*\d+)?\s*$", re.IGNORECASE)
+_DICE_SPEC = re.compile(r"\s*(\d+)d(\d+)\s*([+-]\s*\d+)?\s*")
 
 
 def roll(spec: str, rng: random.Random) -> int:
-    """Parse a dice spec like ``"1d20"``, ``"d20"``, ``"2d6+3"`` and return the sum."""
-    match = _DICE_SPEC.match(spec)
+    """Sum dice from a spec like '2d6+3' or '1d20'.
+
+    Raises ``ValueError`` on malformed input.
+    """
+    match = _DICE_SPEC.fullmatch(spec)
     if not match:
         raise ValueError(f"invalid dice spec: {spec!r}")
-    count_str, sides_str, modifier_str = match.groups()
-    count = int(count_str) if count_str else 1
-    sides = int(sides_str)
-    if count <= 0 or sides <= 0:
-        raise ValueError(f"non-positive dice count/sides in {spec!r}")
-    modifier = int(modifier_str.replace(" ", "")) if modifier_str else 0
-    total = sum(rng.randint(1, sides) for _ in range(count)) + modifier
+    n = int(match.group(1))
+    sides = int(match.group(2))
+    if n < 1 or sides < 2:
+        raise ValueError(f"invalid dice spec: {spec!r}")
+    total = sum(rng.randint(1, sides) for _ in range(n))
+    mod = match.group(3)
+    if mod is not None:
+        total += int(mod.replace(" ", ""))
     return total
 
 
-def _d20_outcome(face: int, total: int, target: int) -> str:
-    if face == 20:
+def _outcome(d20: int, succeeded: bool) -> Outcome:
+    if d20 == 20:
         return "critical_success"
-    if face == 1:
+    if d20 == 1:
         return "critical_failure"
-    return "success" if total >= target else "failure"
+    return "success" if succeeded else "failure"
 
 
 def resolve_check(
-    skill: str, dc: int, mods: dict[str, int], rng: random.Random
+    *, skill: str, dc: int, modifier: int, rng: random.Random
 ) -> Resolution:
-    """A skill check: d20 + ``mods.get(skill, 0)`` vs DC."""
-    modifier = mods.get(skill, 0)
-    face = rng.randint(1, 20)
-    total = face + modifier
-    outcome = _d20_outcome(face, total, dc)
+    d20 = rng.randint(1, 20)
+    total = d20 + modifier
+    outcome = _outcome(d20, total >= dc)
+    detail = (
+        f"{skill} check: 1d20({d20}) {modifier:+d} = {total} vs DC {dc} → {outcome}"
+    )
     return Resolution(
         kind="check",
-        outcome=outcome,  # type: ignore[arg-type]
-        roll=face,
+        outcome=outcome,
+        roll=d20,
         modifier=modifier,
         total=total,
         target=dc,
-        detail=f"{skill} check: d20={face} {modifier:+d} = {total} vs DC {dc} → {outcome}",
+        detail=detail,
     )
 
 
-def resolve_attack(attack_mod: int, target_ac: int, rng: random.Random) -> Resolution:
-    """A weapon attack roll: d20 + attack_mod vs target AC."""
-    face = rng.randint(1, 20)
-    total = face + attack_mod
-    outcome = _d20_outcome(face, total, target_ac)
+def resolve_attack(
+    *, attack_mod: int, target_ac: int, rng: random.Random
+) -> Resolution:
+    d20 = rng.randint(1, 20)
+    total = d20 + attack_mod
+    outcome = _outcome(d20, total >= target_ac)
+    detail = (
+        f"attack: 1d20({d20}) {attack_mod:+d} = {total} vs AC {target_ac} → {outcome}"
+    )
     return Resolution(
         kind="attack",
-        outcome=outcome,  # type: ignore[arg-type]
-        roll=face,
+        outcome=outcome,
+        roll=d20,
         modifier=attack_mod,
         total=total,
         target=target_ac,
-        detail=f"attack: d20={face} {attack_mod:+d} = {total} vs AC {target_ac} → {outcome}",
+        detail=detail,
     )
 
 
 def resolve_save(
-    save_kind: str, dc: int, mods: dict[str, int], rng: random.Random
+    *, save_kind: str, dc: int, modifier: int, rng: random.Random
 ) -> Resolution:
-    """A saving throw: d20 + ``mods.get(save_kind, 0)`` vs DC."""
-    modifier = mods.get(save_kind, 0)
-    face = rng.randint(1, 20)
-    total = face + modifier
-    outcome = _d20_outcome(face, total, dc)
+    d20 = rng.randint(1, 20)
+    total = d20 + modifier
+    outcome = _outcome(d20, total >= dc)
+    detail = (
+        f"{save_kind} save: 1d20({d20}) {modifier:+d} = {total} vs DC {dc} → {outcome}"
+    )
     return Resolution(
         kind="save",
-        outcome=outcome,  # type: ignore[arg-type]
-        roll=face,
+        outcome=outcome,
+        roll=d20,
         modifier=modifier,
         total=total,
         target=dc,
-        detail=f"{save_kind} save: d20={face} {modifier:+d} = {total} vs DC {dc} → {outcome}",
+        detail=detail,
     )
-
-
-def effective_mods(
-    stats: CharacterStats,
-    carried_item_ids: Iterable[str],
-    items: Mapping[str, Item],
-) -> dict[str, int]:
-    """Sum ``stats.mods`` with the ``effects`` of every carried item that exists
-    in ``items``. Missing item ids are skipped silently."""
-    result: dict[str, int] = dict(stats.mods)
-    for item_id in carried_item_ids:
-        item = items.get(item_id)
-        if item is None:
-            continue
-        for k, v in item.effects.items():
-            result[k] = result.get(k, 0) + v
-    return result
-
-
-def apply_damage(stats: CharacterStats, damage: int) -> CharacterStats:
-    """Return a new ``CharacterStats`` with HP reduced by ``damage``, clamped at 0.
-
-    Negative damage = healing. If ``stats.hp_max > 0``, healing is capped at
-    ``hp_max``; if ``hp_max == 0`` (the default), healing is unbounded.
-    """
-    new_hp = max(stats.hp - damage, 0)
-    if stats.hp_max > 0:
-        new_hp = min(new_hp, stats.hp_max)
-    return stats.model_copy(update={"hp": new_hp})
